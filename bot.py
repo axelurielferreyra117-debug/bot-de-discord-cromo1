@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import discord
 from discord import app_commands
@@ -33,15 +32,37 @@ def get_db():
     try:
         conn.execute("ALTER TABLE cromos ADD COLUMN nivel INTEGER NOT NULL DEFAULT 1")
     except sqlite3.OperationalError:
-        pass  # la columna ya existe
+        pass
+    try:
+        conn.execute("ALTER TABLE cromos ADD COLUMN owner_username TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE cromos ADD COLUMN imagen_nivel1 TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE cromos ADD COLUMN imagen_nivel2 TEXT")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE cromos ADD COLUMN imagen_nivel3 TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.execute(
+        "UPDATE cromos SET imagen_nivel1 = imagen_url WHERE imagen_nivel1 IS NULL"
+    )
     return conn
 
 
-def crear_cromo(nombre: str, imagen_url: str, creado_por: int) -> int:
+def crear_cromo(nombre: str, imagen_url: str, creado_por: int, owner_id: int, owner_username: str) -> int:
     conn = get_db()
     cur = conn.execute(
-        "INSERT INTO cromos (nombre, imagen_url, owner_id, creado_por) VALUES (?, ?, ?, ?)",
-        (nombre, imagen_url, creado_por, creado_por),
+        """
+        INSERT INTO cromos (nombre, imagen_url, owner_id, owner_username, creado_por, imagen_nivel1)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (nombre, imagen_url, owner_id, owner_username, creado_por, imagen_url),
     )
     conn.commit()
     cromo_id = cur.lastrowid
@@ -58,9 +79,11 @@ def obtener_cromo(cromo_id: int):
     return row
 
 
-def asignar_cromo(cromo_id: int, user_id: int) -> bool:
+def asignar_cromo(cromo_id: int, user_id: int, username: str) -> bool:
     conn = get_db()
-    cur = conn.execute("UPDATE cromos SET owner_id = ? WHERE id = ?", (user_id, cromo_id))
+    cur = conn.execute(
+        "UPDATE cromos SET owner_id = ?, owner_username = ? WHERE id = ?", (user_id, username, cromo_id)
+    )
     conn.commit()
     ok = cur.rowcount > 0
     conn.close()
@@ -69,7 +92,7 @@ def asignar_cromo(cromo_id: int, user_id: int) -> bool:
 
 def quitar_dueno(cromo_id: int) -> bool:
     conn = get_db()
-    cur = conn.execute("UPDATE cromos SET owner_id = NULL WHERE id = ?", (cromo_id,))
+    cur = conn.execute("UPDATE cromos SET owner_id = NULL, owner_username = NULL WHERE id = ?", (cromo_id,))
     conn.commit()
     ok = cur.rowcount > 0
     conn.close()
@@ -88,9 +111,10 @@ def subir_nivel(cromo_id: int, nueva_imagen_url: str):
         conn.close()
         return None
     nuevo_nivel = nivel_actual + 1
+    columna_nivel = f"imagen_nivel{nuevo_nivel}"
     conn.execute(
-        "UPDATE cromos SET nivel = ?, imagen_url = ? WHERE id = ?",
-        (nuevo_nivel, nueva_imagen_url, cromo_id),
+        f"UPDATE cromos SET nivel = ?, imagen_url = ?, {columna_nivel} = ? WHERE id = ?",
+        (nuevo_nivel, nueva_imagen_url, nueva_imagen_url, cromo_id),
     )
     conn.commit()
     conn.close()
@@ -171,8 +195,17 @@ async def on_ready():
 
 
 @bot.tree.command(name="crear_cromo", description="Crea un cromo único nuevo (solo mods)")
-@app_commands.describe(nombre="Nombre del cromo", imagen="Imagen del cromo (archivo)")
-async def crear_cromo_cmd(interaction: discord.Interaction, nombre: str, imagen: discord.Attachment):
+@app_commands.describe(
+    nombre="Nombre del cromo",
+    imagen="Imagen del cromo (archivo)",
+    dueño="A quién le pertenece (opcional, default: vos mismo)",
+)
+async def crear_cromo_cmd(
+    interaction: discord.Interaction,
+    nombre: str,
+    imagen: discord.Attachment,
+    dueño: discord.Member = None,
+):
     if not es_mod(interaction):
         await interaction.response.send_message(
             f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden crear cromos.", ephemeral=True
@@ -183,11 +216,12 @@ async def crear_cromo_cmd(interaction: discord.Interaction, nombre: str, imagen:
         await interaction.response.send_message("El archivo adjunto tiene que ser una imagen.", ephemeral=True)
         return
 
-    cromo_id = crear_cromo(nombre, imagen.url, interaction.user.id)
+    propietario = dueño or interaction.user
+    cromo_id = crear_cromo(nombre, imagen.url, interaction.user.id, propietario.id, propietario.display_name)
 
     embed = discord.Embed(
         title=f"Cromo #{cromo_id}: {nombre}",
-        description=f"Dueño: {interaction.user.mention}\nNivel: {etiqueta_nivel(1)}",
+        description=f"Dueño: {propietario.mention}\nNivel: {etiqueta_nivel(1)}",
     )
     embed.set_image(url=imagen.url)
     await interaction.response.send_message(content="✅ Cromo creado.", embed=embed)
@@ -208,7 +242,7 @@ async def dar_cromo(interaction: discord.Interaction, cromo_id: int, usuario: di
         return
 
     _, nombre, imagen_url, owner_actual, nivel = cromo
-    asignar_cromo(cromo_id, usuario.id)
+    asignar_cromo(cromo_id, usuario.id, usuario.display_name)
 
     embed = discord.Embed(
         title=f"Cromo #{cromo_id}: {nombre}",
@@ -353,22 +387,66 @@ async def lista_cromos(interaction: discord.Interaction):
     await interaction.response.send_message("📋 **Todos los cromos**\n" + texto)
 
 
-# ---------- Servidor HTTP mínimo (para que Render mantenga el servicio despierto) ----------
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+# ---------- Servidor web (Flask): sirve la página y la API, y mantiene Render despierto ----------
+from flask import Flask, jsonify, send_from_directory
 
-    def log_message(self, format, *args):
-        pass
+web_app = Flask(__name__, static_folder="static", static_url_path="")
 
 
-def run_health_server():
-    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
-    server.serve_forever()
+@web_app.route("/")
+def index():
+    return send_from_directory("static", "index.html")
+
+
+@web_app.route("/api/cromos")
+def api_cromos():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, nombre, owner_id, owner_username, nivel,
+               imagen_nivel1, imagen_nivel2, imagen_nivel3
+        FROM cromos ORDER BY id
+        """
+    ).fetchall()
+    conn.close()
+
+    resultado = []
+    for cid, nombre, owner_id, owner_username, nivel, i1, i2, i3 in rows:
+        resultado.append(
+            {
+                "id": cid,
+                "nombre": nombre,
+                "nivel_actual": nivel,
+                "owner_id": owner_id,
+                "owner_username": owner_username,
+                "imagenes": {"1": i1, "2": i2, "3": i3},
+            }
+        )
+    return jsonify(resultado)
+
+
+@web_app.route("/api/ranking")
+def api_ranking():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT owner_id, owner_username, COUNT(*) as cantidad
+        FROM cromos
+        WHERE owner_id IS NOT NULL
+        GROUP BY owner_id
+        ORDER BY cantidad DESC
+        """
+    ).fetchall()
+    conn.close()
+    return jsonify(
+        [{"owner_id": r[0], "owner_username": r[1], "cantidad": r[2]} for r in rows]
+    )
+
+
+def run_web_server():
+    web_app.run(host="0.0.0.0", port=PORT, use_reloader=False)
 
 
 if __name__ == "__main__":
-    threading.Thread(target=run_health_server, daemon=True).start()
+    threading.Thread(target=run_web_server, daemon=True).start()
     bot.run(DISCORD_TOKEN)
