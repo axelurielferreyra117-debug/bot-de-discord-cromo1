@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Álbum de Cromos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0b0e14;
+    --surface: #131826;
+    --surface-2: #1b2233;
+    --border: #262f45;
+    --text: #eef1f8;
+    --muted: #8b93a7;
+    --n1: #8a94a6;   /* Normal */
+    --n2: #b06bff;   /* Especial */
+    --n3: #f0b93e;   /* Muy Especial */
+    --n2-glow: rgba(176,107,255,.35);
+    --n3-glow: rgba(240,185,62,.4);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #151d33 0%, transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, #1a1430 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Manrope',sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:'Rajdhani',sans-serif;
+    letter-spacing:.02em;
+    text-transform:uppercase;
+  }
+  a{color:inherit;}
+
+  header{
+    padding:28px 24px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+    max-width:1180px;
+    margin:0 auto;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .brand h1{font-size:clamp(28px,5vw,42px);font-weight:700;margin:0;background:linear-gradient(90deg,#fff,#b8c0d9);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .brand span{color:var(--muted);font-size:14px;font-family:'Manrope',sans-serif;text-transform:none;letter-spacing:0;}
+
+  nav{display:flex;gap:8px;flex-wrap:wrap;}
+  nav button{
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--muted);
+    padding:9px 18px;
+    border-radius:999px;
+    font-family:'Rajdhani',sans-serif;
+    font-weight:600;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    font-size:13px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  nav button:hover{color:var(--text);border-color:#3a4568;}
+  nav button.active{background:var(--n2);border-color:var(--n2);color:#fff;box-shadow:0 0 22px var(--n2-glow);}
+
+  main{max-width:1180px;margin:0 auto;padding:8px 24px 80px;}
+  section{display:none;}
+  section.active{display:block;animation:fadeIn .3s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  .stat-row{display:flex;gap:12px;margin:6px 0 26px;flex-wrap:wrap;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 18px;min-width:120px;}
+  .stat b{display:block;font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;}
+  .stat span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+    gap:16px;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    overflow:hidden;
+    cursor:pointer;
+    transition:transform .15s ease, border-color .15s ease;
+    position:relative;
+  }
+  .card:hover{transform:translateY(-4px);border-color:#3a4568;}
+  .card .thumb{aspect-ratio:1/1;background:var(--surface-2) center/cover no-repeat;position:relative;}
+  .card .tier-pill{
+    position:absolute;top:8px;right:8px;
+    font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:3px 8px;border-radius:999px;
+    background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  }
+  .tier-1{color:var(--n1);}
+  .tier-2{color:var(--n2);text-shadow:0 0 8px var(--n2-glow);}
+  .tier-3{color:var(--n3);text-shadow:0 0 8px var(--n3-glow);}
+  .card .info{padding:10px 12px 12px;}
+  .card .info h3{font-size:16px;margin:0 0 4px;font-weight:600;letter-spacing:0;text-transform:none;}
+  .card .info p{margin:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .card.tier-2-border{border-color:var(--n2);}
+  .card.tier-3-border{border-color:var(--n3);box-shadow:0 0 18px -6px var(--n3-glow);}
+
+  .empty{color:var(--muted);padding:40px 0;text-align:center;}
+
+  /* Modal */
+  .overlay{
+    display:none;position:fixed;inset:0;background:rgba(6,8,14,.75);
+    backdrop-filter:blur(3px);z-index:50;align-items:center;justify-content:center;padding:20px;
+  }
+  .overlay.open{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--border);border-radius:20px;
+    max-width:640px;width:100%;max-height:88vh;overflow-y:auto;padding:24px;position:relative;
+  }
+  .modal .close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+  .modal h2{font-size:26px;margin:0 0 4px;}
+  .modal .owner{color:var(--muted);font-size:14px;margin-bottom:18px;}
+  .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .level-box{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface-2);}
+  .level-box .img{aspect-ratio:1/1;background:#0e1320 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;}
+  .level-box .lbl{padding:8px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;}
+  .level-box.locked .img{opacity:.25;}
+  .level-box.locked .lbl{color:var(--muted);}
+  .level-box.l1 .lbl{color:var(--n1);}
+  .level-box.l2 .lbl{color:var(--n2);}
+  .level-box.l3 .lbl{color:var(--n3);}
+  .level-box.current{outline:2px solid currentColor;}
+
+  /* Ranking */
+  .rank-list{display:flex;flex-direction:column;gap:10px;max-width:560px;}
+  .rank-row{
+    display:flex;align-items:center;gap:14px;
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 16px;
+  }
+  .rank-row .pos{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;width:28px;color:var(--muted);}
+  .rank-row:nth-child(1) .pos{color:var(--n3);}
+  .rank-row:nth-child(2) .pos{color:#c9cfdd;}
+  .rank-row:nth-child(3) .pos{color:#c98a4b;}
+  .rank-row .name{flex:1;font-weight:600;}
+  .rank-row .count{font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--n2);}
+
+  /* Reglas */
+  .rules{max-width:680px;}
+  .rules h3{font-size:18px;margin:22px 0 8px;color:var(--n2);}
+  .rules h3:first-child{margin-top:0;}
+  .rules p, .rules li{color:#c7cde0;line-height:1.6;font-size:15px;}
+  .rules ul{padding-left:20px;margin:6px 0;}
+
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Álbum de Cromos</h1>
+    <span>colección oficial del canal</span>
+  </div>
+  <nav>
+    <button data-tab="album" class="active">Álbum</button>
+    <button data-tab="ranking">Top coleccionistas</button>
+    <button data-tab="reglas">Reglas</button>
+  </nav>
+</header>
+
+<main>
+
+  <section id="album" class="active">
+    <div class="stat-row">
+      <div class="stat"><b id="stat-total">–</b><span>Cromos creados</span></div>
+      <div class="stat"><b id="stat-especiales">–</b><span>Especiales o más</span></div>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div id="grid-empty" class="empty" style="display:none;">Todavía no hay cromos creados.</div>
+  </section>
+
+  <section id="ranking">
+    <h2 style="font-size:20px;margin-bottom:16px;">Quién tiene más cromos</h2>
+    <div id="rank-list" class="rank-list"></div>
+    <div id="rank-empty" class="empty" style="display:none;">Todavía nadie tiene cromos.</div>
+  </section>
+
+  <section id="reglas">
+    <div class="rules">
+      <h3>Cómo se consiguen</h3>
+      <p>Cada cromo es único: solo existe una copia en todo el servidor. Los crea el mod del canal y se los entrega a quien se los gane.</p>
+
+      <h3>Niveles</h3>
+      <ul>
+        <li><strong>Normal</strong> — el nivel con el que nace todo cromo.</li>
+        <li><strong>Especial</strong> — una versión mejorada, con efecto animado.</li>
+        <li><strong>Muy Especial</strong> — la versión máxima, con el personaje en movimiento completo.</li>
+      </ul>
+      <p>Al llegar a <strong>5 cromos</strong> en tu colección, quedás habilitado para que el mod suba de nivel a uno de los tuyos. No perdés ningún cromo por esto.</p>
+
+      <h3>Dónde jugar</h3>
+      <p>Todo pasa dentro del servidor de Discord, usando los comandos del bot. Esta página es solo para ver la colección completa y el ranking — no se puede reclamar ni intercambiar cromos desde acá.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>Álbum de Cromos · datos en vivo desde el servidor de Discord</footer>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <button class="close" id="modal-close">&times;</button>
+    <h2 id="modal-title">—</h2>
+    <div class="owner" id="modal-owner">—</div>
+    <div class="levels" id="modal-levels"></div>
+  </div>
+</div>
+
+<script>
+const TIER_LABEL = {1:"Normal", 2:"Especial", 3:"Muy Especial"};
+let cromosCache = [];
+
+async function cargarAlbum(){
+  const res = await fetch('/api/cromos');
+  const data = await res.json();
+  cromosCache = data;
+
+  document.getElementById('stat-total').textContent = data.length;
+  document.getElementById('stat-especiales').textContent = data.filter(c => c.nivel_actual >= 2).length;
+
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('grid-empty');
+  grid.innerHTML = '';
+
+  if(data.length === 0){
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  data.forEach(c => {
+    const imgActual = c.imagenes[String(c.nivel_actual)] || '';
+    const div = document.createElement('div');
+    div.className = 'card' + (c.nivel_actual === 2 ? ' tier-2-border' : c.nivel_actual === 3 ? ' tier-3-border' : '');
+    div.innerHTML = `
+      <div class="thumb" style="background-image:url('${imgActual}')">
+        <span class="tier-pill tier-${c.nivel_actual}">${TIER_LABEL[c.nivel_actual]}</span>
+      </div>
+      <div class="info">
+        <h3>${escapeHtml(c.nombre)}</h3>
+        <p>${c.owner_username ? escapeHtml(c.owner_username) : 'Sin dueño'}</p>
+      </div>
+    `;
+    div.addEventListener('click', () => abrirModal(c));
+    grid.appendChild(div);
+  });
+}
+
+function abrirModal(c){
+  document.getElementById('modal-title').textContent = c.nombre;
+  document.getElementById('modal-owner').textContent = c.owner_username ? `Dueño: ${c.owner_username}` : 'Sin dueño';
+
+  const levels = document.getElementById('modal-levels');
+  levels.innerHTML = '';
+  [1,2,3].forEach(n => {
+    const img = c.imagenes[String(n)];
+    const desbloqueado = n <= c.nivel_actual && img;
+    const box = document.createElement('div');
+    box.className = `level-box l${n} ${desbloqueado ? '' : 'locked'} ${n === c.nivel_actual ? 'current' : ''}`;
+    box.innerHTML = `
+      <div class="img" style="${desbloqueado ? `background-image:url('${img}')` : ''}">
+        ${desbloqueado ? '' : '🔒'}
+      </div>
+      <div class="lbl">${TIER_LABEL[n]}</div>
+    `;
+    levels.appendChild(box);
+  });
+
+  document.getElementById('overlay').classList.add('open');
+}
+
+document.getElementById('modal-close').addEventListener('click', () => {
+  document.getElementById('overlay').classList.remove('open');
+});
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if(e.target.id === 'overlay') document.getElementById('overlay').classList.remove('open');
+});
+
+async function cargarRanking(){
+  const res = await fetch('/api/ranking');
+  const data = await res.json();
+  const list = document.getElementById('rank-list');
+  const empty = document.getElementById('rank-empty');
+  list.innerHTML = '';
+
+  if(data.length === 0){
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  data.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'rank-row';
+    row.innerHTML = `
+      <div class="pos">${i+1}</div>
+      <div class="name">${escapeHtml(r.owner_username || 'Desconocido')}</div>
+      <div class="count">${r.cantidad}</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Navegación entre tabs
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('main section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+cargarAlbum();
+cargarRanking();
+</script>
+
+</body>
+</html>
