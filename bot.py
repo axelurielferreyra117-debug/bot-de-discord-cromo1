@@ -25,18 +25,23 @@ def get_db():
             nombre TEXT NOT NULL,
             imagen_url TEXT NOT NULL,
             owner_id INTEGER,
-            creado_por INTEGER NOT NULL
+            creado_por INTEGER NOT NULL,
+            nivel INTEGER NOT NULL DEFAULT 1
         )
         """
     )
+    try:
+        conn.execute("ALTER TABLE cromos ADD COLUMN nivel INTEGER NOT NULL DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass  # la columna ya existe
     return conn
 
 
 def crear_cromo(nombre: str, imagen_url: str, creado_por: int) -> int:
     conn = get_db()
     cur = conn.execute(
-        "INSERT INTO cromos (nombre, imagen_url, owner_id, creado_por) VALUES (?, ?, NULL, ?)",
-        (nombre, imagen_url, creado_por),
+        "INSERT INTO cromos (nombre, imagen_url, owner_id, creado_por) VALUES (?, ?, ?, ?)",
+        (nombre, imagen_url, creado_por, creado_por),
     )
     conn.commit()
     cromo_id = cur.lastrowid
@@ -47,7 +52,7 @@ def crear_cromo(nombre: str, imagen_url: str, creado_por: int) -> int:
 def obtener_cromo(cromo_id: int):
     conn = get_db()
     row = conn.execute(
-        "SELECT id, nombre, imagen_url, owner_id FROM cromos WHERE id = ?", (cromo_id,)
+        "SELECT id, nombre, imagen_url, owner_id, nivel FROM cromos WHERE id = ?", (cromo_id,)
     ).fetchone()
     conn.close()
     return row
@@ -71,10 +76,40 @@ def quitar_dueno(cromo_id: int) -> bool:
     return ok
 
 
+def subir_nivel(cromo_id: int, nueva_imagen_url: str):
+    """Sube el cromo un nivel (1->2 o 2->3) y le cambia la imagen. Devuelve el nuevo nivel, o None si no existe o ya está al máximo."""
+    conn = get_db()
+    row = conn.execute("SELECT nivel FROM cromos WHERE id = ?", (cromo_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    nivel_actual = row[0]
+    if nivel_actual >= 3:
+        conn.close()
+        return None
+    nuevo_nivel = nivel_actual + 1
+    conn.execute(
+        "UPDATE cromos SET nivel = ?, imagen_url = ? WHERE id = ?",
+        (nuevo_nivel, nueva_imagen_url, cromo_id),
+    )
+    conn.commit()
+    conn.close()
+    return nuevo_nivel
+
+
+def contar_inventario(user_id: int) -> int:
+    conn = get_db()
+    total = conn.execute(
+        "SELECT COUNT(*) FROM cromos WHERE owner_id = ?", (user_id,)
+    ).fetchone()[0]
+    conn.close()
+    return total
+
+
 def inventario_de(user_id: int):
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, nombre, imagen_url FROM cromos WHERE owner_id = ? ORDER BY id", (user_id,)
+        "SELECT id, nombre, imagen_url, nivel FROM cromos WHERE owner_id = ? ORDER BY id", (user_id,)
     ).fetchall()
     conn.close()
     return rows
@@ -83,10 +118,30 @@ def inventario_de(user_id: int):
 def listar_todos():
     conn = get_db()
     rows = conn.execute(
-        "SELECT id, nombre, owner_id FROM cromos ORDER BY id"
+        "SELECT id, nombre, owner_id, nivel FROM cromos ORDER BY id"
     ).fetchall()
     conn.close()
     return rows
+
+
+def candidatos_upgrade(minimo: int = 5):
+    """Usuarios con al menos `minimo` cromos, ordenados de mayor a menor cantidad."""
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT owner_id, COUNT(*) as cantidad
+        FROM cromos
+        WHERE owner_id IS NOT NULL
+        GROUP BY owner_id
+        HAVING cantidad >= ?
+        ORDER BY cantidad DESC
+        """,
+        (minimo,),
+    ).fetchall()
+    conn.close()
+    return rows
+
+
 
 
 # ---------- Bot de Discord ----------
@@ -100,6 +155,13 @@ def es_mod(interaction: discord.Interaction) -> bool:
     if not isinstance(interaction.user, discord.Member):
         return False
     return any(role.id == MOD_ROLE_ID for role in interaction.user.roles)
+
+
+NIVELES = {1: "⚪ Normal", 2: "🟣 Especial", 3: "🟡 Muy Especial"}
+
+
+def etiqueta_nivel(nivel: int) -> str:
+    return NIVELES.get(nivel, f"Nivel {nivel}")
 
 
 @bot.event
@@ -123,7 +185,10 @@ async def crear_cromo_cmd(interaction: discord.Interaction, nombre: str, imagen:
 
     cromo_id = crear_cromo(nombre, imagen.url, interaction.user.id)
 
-    embed = discord.Embed(title=f"Cromo #{cromo_id}: {nombre}", description="Sin dueño todavía")
+    embed = discord.Embed(
+        title=f"Cromo #{cromo_id}: {nombre}",
+        description=f"Dueño: {interaction.user.mention}\nNivel: {etiqueta_nivel(1)}",
+    )
     embed.set_image(url=imagen.url)
     await interaction.response.send_message(content="✅ Cromo creado.", embed=embed)
 
@@ -142,10 +207,13 @@ async def dar_cromo(interaction: discord.Interaction, cromo_id: int, usuario: di
         await interaction.response.send_message(f"No existe el cromo #{cromo_id}.", ephemeral=True)
         return
 
-    _, nombre, imagen_url, owner_actual = cromo
+    _, nombre, imagen_url, owner_actual, nivel = cromo
     asignar_cromo(cromo_id, usuario.id)
 
-    embed = discord.Embed(title=f"Cromo #{cromo_id}: {nombre}", description=f"Nuevo dueño: {usuario.mention}")
+    embed = discord.Embed(
+        title=f"Cromo #{cromo_id}: {nombre}",
+        description=f"Nuevo dueño: {usuario.mention}\nNivel: {etiqueta_nivel(nivel)}",
+    )
     embed.set_image(url=imagen_url)
     aviso_extra = f" (antes era de <@{owner_actual}>)" if owner_actual else ""
     await interaction.response.send_message(
@@ -169,6 +237,61 @@ async def quitar_cromo(interaction: discord.Interaction, cromo_id: int):
     await interaction.response.send_message(f"El cromo #{cromo_id} quedó sin dueño.")
 
 
+@bot.tree.command(name="subir_nivel", description="Sube de nivel un cromo, cambiándole la imagen por un GIF (solo mods)")
+@app_commands.describe(cromo_id="ID del cromo a subir de nivel", imagen="Nueva imagen/GIF para el nivel siguiente")
+async def subir_nivel_cmd(interaction: discord.Interaction, cromo_id: int, imagen: discord.Attachment):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden subir de nivel un cromo.", ephemeral=True
+        )
+        return
+
+    cromo = obtener_cromo(cromo_id)
+    if cromo is None:
+        await interaction.response.send_message(f"No existe el cromo #{cromo_id}.", ephemeral=True)
+        return
+
+    _, nombre, _, owner_id, nivel_actual = cromo
+
+    if nivel_actual >= 3:
+        await interaction.response.send_message(
+            f"El cromo #{cromo_id} ya está en el nivel máximo ({etiqueta_nivel(3)}).", ephemeral=True
+        )
+        return
+
+    if not (imagen.content_type or "").startswith("image/"):
+        await interaction.response.send_message("El archivo adjunto tiene que ser una imagen o GIF.", ephemeral=True)
+        return
+
+    nuevo_nivel = subir_nivel(cromo_id, imagen.url)
+
+    embed = discord.Embed(
+        title=f"Cromo #{cromo_id}: {nombre}",
+        description=f"Dueño: <@{owner_id}>\nNivel: {etiqueta_nivel(nuevo_nivel)} (antes: {etiqueta_nivel(nivel_actual)})",
+    )
+    embed.set_image(url=imagen.url)
+    await interaction.response.send_message(
+        content=f"⬆️ **{nombre}** subió a {etiqueta_nivel(nuevo_nivel)}!", embed=embed
+    )
+
+
+@bot.tree.command(name="candidatos", description="Lista usuarios con 5+ cromos, habilitados para subir de nivel uno (solo mods)")
+async def candidatos_cmd(interaction: discord.Interaction):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden ver esto.", ephemeral=True
+        )
+        return
+
+    filas = candidatos_upgrade(5)
+    if not filas:
+        await interaction.response.send_message("Todavía nadie llegó a 5 cromos.")
+        return
+
+    lineas = [f"<@{user_id}> — **{cantidad}** cromos" for user_id, cantidad in filas]
+    await interaction.response.send_message("🌟 **Habilitados para subir de nivel un cromo**\n" + "\n".join(lineas))
+
+
 @bot.tree.command(name="inventario", description="Muestra el inventario de cromos de un usuario")
 @app_commands.describe(usuario="Usuario a consultar (default: vos mismo)")
 async def inventario(interaction: discord.Interaction, usuario: discord.Member = None):
@@ -181,12 +304,14 @@ async def inventario(interaction: discord.Interaction, usuario: discord.Member =
 
     # Discord permite hasta 10 embeds por mensaje
     embeds = []
-    for cromo_id, nombre, imagen_url in filas[:10]:
-        e = discord.Embed(title=f"#{cromo_id} — {nombre}")
+    for cromo_id, nombre, imagen_url, nivel in filas[:10]:
+        e = discord.Embed(title=f"#{cromo_id} — {nombre}", description=etiqueta_nivel(nivel))
         e.set_thumbnail(url=imagen_url)
         embeds.append(e)
 
     extra = f"\n(mostrando los primeros 10 de {len(filas)})" if len(filas) > 10 else ""
+    if len(filas) >= 5:
+        extra += "\n🌟 ¡Llegaste a 5+ cromos! Estás habilitado para subir de nivel uno."
     await interaction.response.send_message(
         content=f"🗂️ Inventario de {usuario.mention}: **{len(filas)}** cromo(s){extra}", embeds=embeds
     )
@@ -200,9 +325,11 @@ async def cromo_info(interaction: discord.Interaction, cromo_id: int):
         await interaction.response.send_message(f"No existe el cromo #{cromo_id}.", ephemeral=True)
         return
 
-    _, nombre, imagen_url, owner_id = cromo
+    _, nombre, imagen_url, owner_id, nivel = cromo
     dueno = f"<@{owner_id}>" if owner_id else "Sin dueño"
-    embed = discord.Embed(title=f"Cromo #{cromo_id}: {nombre}", description=f"Dueño: {dueno}")
+    embed = discord.Embed(
+        title=f"Cromo #{cromo_id}: {nombre}", description=f"Dueño: {dueno}\nNivel: {etiqueta_nivel(nivel)}"
+    )
     embed.set_image(url=imagen_url)
     await interaction.response.send_message(embed=embed)
 
@@ -215,9 +342,9 @@ async def lista_cromos(interaction: discord.Interaction):
         return
 
     lineas = []
-    for cromo_id, nombre, owner_id in filas:
+    for cromo_id, nombre, owner_id, nivel in filas:
         dueno = f"<@{owner_id}>" if owner_id else "_libre_"
-        lineas.append(f"#{cromo_id} — **{nombre}** — {dueno}")
+        lineas.append(f"#{cromo_id} — **{nombre}** ({etiqueta_nivel(nivel)}) — {dueno}")
 
     texto = "\n".join(lineas)
     if len(texto) > 3900:
