@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Álbum de Cromos</title>
+<title>Cromos de la Muchachada</title>
+<link rel="icon" type="image/png" href="tiara.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -19,13 +20,17 @@
     --n3: #f0b93e;   /* Muy Especial */
     --n2-glow: rgba(176,107,255,.35);
     --n3-glow: rgba(240,185,62,.4);
+    --azul: #3d8ef0;
+    --rojo: #e63946;
+    --azul-glow: rgba(61,142,240,.4);
+    --rojo-glow: rgba(230,57,70,.45);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
     background:
-      radial-gradient(1200px 600px at 15% -10%, #151d33 0%, transparent 60%),
-      radial-gradient(1000px 500px at 100% 0%, #1a1430 0%, transparent 55%),
+      linear-gradient(180deg, rgba(6,7,12,.88) 0%, rgba(6,7,12,.94) 55%, rgba(6,7,12,.98) 100%),
+      url('fondo.png') center 15%/cover no-repeat fixed,
       var(--bg);
     color:var(--text);
     font-family:'Manrope',sans-serif;
@@ -52,9 +57,9 @@
 
   nav{display:flex;gap:8px;flex-wrap:wrap;}
   nav button{
-    background:var(--surface);
-    border:1px solid var(--border);
-    color:var(--muted);
+    background:rgba(10,14,22,.35);
+    border:1.5px solid var(--azul);
+    color:var(--azul);
     padding:9px 18px;
     border-radius:999px;
     font-family:'Rajdhani',sans-serif;
@@ -64,9 +69,10 @@
     font-size:13px;
     cursor:pointer;
     transition:all .15s ease;
+    backdrop-filter:blur(6px);
   }
-  nav button:hover{color:var(--text);border-color:#3a4568;}
-  nav button.active{background:var(--n2);border-color:var(--n2);color:#fff;box-shadow:0 0 22px var(--n2-glow);}
+  nav button:hover{color:#fff;box-shadow:0 0 16px var(--azul-glow);}
+  nav button.active{background:rgba(230,57,70,.15);border-color:var(--rojo);color:#fff;box-shadow:0 0 22px var(--rojo-glow);}
 
   main{max-width:1180px;margin:0 auto;padding:8px 24px 80px;}
   section{display:none;}
@@ -156,13 +162,26 @@
   .rules ul{padding-left:20px;margin:6px 0;}
 
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
+
+  .mascota{
+    position:fixed;
+    bottom:0;
+    right:12px;
+    width:min(220px, 26vw);
+    pointer-events:none;
+    z-index:40;
+    filter:drop-shadow(0 6px 18px rgba(0,0,0,.5));
+  }
+  @media (max-width:640px){
+    .mascota{width:130px;opacity:.85;}
+  }
 </style>
 </head>
 <body>
 
 <header>
   <div class="brand">
-    <h1>Álbum de Cromos</h1>
+    <h1>Cromos de la Muchachada</h1>
     <span>colección oficial del canal</span>
   </div>
   <nav>
@@ -208,6 +227,8 @@
   </section>
 
 </main>
+
+<img src="tiara.png" alt="Tiara Basori" class="mascota">
 
 <footer>Álbum de Cromos · datos en vivo desde el servidor de Discord</footer>
 
