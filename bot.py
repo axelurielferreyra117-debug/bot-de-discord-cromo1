@@ -99,6 +99,15 @@ def quitar_dueno(cromo_id: int) -> bool:
     return ok
 
 
+def borrar_cromo(cromo_id: int) -> bool:
+    conn = get_db()
+    cur = conn.execute("DELETE FROM cromos WHERE id = ?", (cromo_id,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
 def subir_nivel(cromo_id: int, nueva_imagen_url: str):
     """Sube el cromo un nivel (1->2 o 2->3) y le cambia la imagen. Devuelve el nuevo nivel, o None si no existe o ya está al máximo."""
     conn = get_db()
@@ -164,8 +173,6 @@ def candidatos_upgrade(minimo: int = 5):
     ).fetchall()
     conn.close()
     return rows
-
-
 
 
 # ---------- Bot de Discord ----------
@@ -269,6 +276,25 @@ async def quitar_cromo(interaction: discord.Interaction, cromo_id: int):
         return
 
     await interaction.response.send_message(f"El cromo #{cromo_id} quedó sin dueño.")
+
+
+@bot.tree.command(name="borrar_cromo", description="Borra un cromo para siempre, incluida su imagen y niveles (solo mods)")
+@app_commands.describe(cromo_id="ID del cromo a borrar")
+async def borrar_cromo_cmd(interaction: discord.Interaction, cromo_id: int):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden borrar cromos.", ephemeral=True
+        )
+        return
+
+    cromo = obtener_cromo(cromo_id)
+    if cromo is None:
+        await interaction.response.send_message(f"No existe el cromo #{cromo_id}.", ephemeral=True)
+        return
+
+    _, nombre, _, _, _ = cromo
+    borrar_cromo(cromo_id)
+    await interaction.response.send_message(f"🗑️ Se borró el cromo #{cromo_id} (**{nombre}**) para siempre.")
 
 
 @bot.tree.command(name="subir_nivel", description="Sube de nivel un cromo, cambiándole la imagen por un GIF (solo mods)")
