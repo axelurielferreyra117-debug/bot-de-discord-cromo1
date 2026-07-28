@@ -140,6 +140,16 @@
   .level-box.l2 .lbl{color:var(--n2);}
   .level-box.l3 .lbl{color:var(--n3);}
   .level-box.current{outline:2px solid currentColor;}
+  .level-box .img{cursor:zoom-in;}
+  .level-box.locked .img{cursor:default;}
+
+  .lightbox{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);
+    z-index:60;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;
+  }
+  .lightbox.open{display:flex;}
+  .lightbox img{max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,.6);}
+  .lightbox .close{position:absolute;top:20px;right:24px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer;}
 
   /* Ranking */
   .rank-list{display:flex;flex-direction:column;gap:10px;max-width:560px;}
@@ -280,6 +290,11 @@
   </div>
 </div>
 
+<div class="lightbox" id="lightbox">
+  <button class="close" id="lightbox-close">&times;</button>
+  <img id="lightbox-img" src="" alt="Cromo en grande">
+</div>
+
 <script>
 const TIER_LABEL = {1:"Normal", 2:"Especial", 3:"Muy Especial"};
 let cromosCache = [];
@@ -338,10 +353,28 @@ function abrirModal(c){
       <div class="lbl">${TIER_LABEL[n]}</div>
     `;
     levels.appendChild(box);
+
+    if(desbloqueado){
+      box.querySelector('.img').addEventListener('click', (e) => {
+        e.stopPropagation();
+        abrirLightbox(img);
+      });
+    }
   });
 
   document.getElementById('overlay').classList.add('open');
 }
+
+function abrirLightbox(url){
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('open');
+}
+document.getElementById('lightbox-close').addEventListener('click', () => {
+  document.getElementById('lightbox').classList.remove('open');
+});
+document.getElementById('lightbox').addEventListener('click', (e) => {
+  if(e.target.id === 'lightbox') document.getElementById('lightbox').classList.remove('open');
+});
 
 document.getElementById('modal-close').addEventListener('click', () => {
   document.getElementById('overlay').classList.remove('open');
