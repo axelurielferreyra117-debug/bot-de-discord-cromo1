@@ -175,6 +175,39 @@
   .rules-table td{padding:9px 10px;border-bottom:1px solid var(--border);color:#c7cde0;vertical-align:top;}
   .rules-table code{background:rgba(61,142,240,.12);color:var(--azul);padding:2px 6px;border-radius:6px;font-size:13px;}
 
+  /* Panel de admin */
+  .admin-btn{
+    background:rgba(230,57,70,.12);border:1px solid var(--rojo);color:#fff;
+    padding:8px 16px;border-radius:10px;font-family:'Rajdhani',sans-serif;font-weight:600;
+    letter-spacing:.03em;text-transform:uppercase;font-size:13px;cursor:pointer;
+  }
+  .admin-btn:hover{background:rgba(230,57,70,.25);}
+  .admin-btn-save{background:rgba(61,142,240,.2);border-color:var(--azul);}
+  .admin-textarea{
+    width:100%;min-height:260px;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:10px;color:var(--text);padding:12px;font-family:monospace;font-size:13px;
+  }
+  .admin-input{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:8px 10px;margin:4px 0 10px;font-size:13px;
+  }
+  #admin-links-panel label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  #footer-links{display:flex;gap:14px;justify-content:center;margin-bottom:8px;}
+  #footer-links a{color:var(--azul);text-decoration:none;font-family:'Rajdhani',sans-serif;font-weight:600;text-transform:uppercase;font-size:13px;}
+  #footer-links a:hover{color:var(--rojo);}
+
+  .pw-box{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:70;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .pw-box.open{display:flex;}
+  .pw-box .card{background:var(--surface);border:1px solid var(--rojo);border-radius:16px;padding:24px;max-width:320px;width:100%;text-align:center;}
+  .pw-box input{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:10px;margin:14px 0;text-align:center;font-size:15px;
+  }
+  .pw-box .err{color:var(--rojo);font-size:13px;min-height:18px;}
+
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
 
   .mascota{
@@ -223,63 +256,42 @@
   </section>
 
   <section id="reglas">
-    <div class="rules">
-      <h3>Cómo se consiguen los cromos</h3>
-      <p>Para conseguir tu primer cromo, tenés que retar a <strong>Silver</strong> de alguna de estas formas:</p>
-      <ul>
-        <li>Retarlo a una apuesta de anime (uno que <strong>ninguno de los dos</strong> haya visto).</li>
-        <li>Donar 10 USD en YouTube.</li>
-        <li>Retarlo a un juego.</li>
-        <li>Poner tu corona en juego, si sos el <strong>Top 1</strong> → a cambio recibís 2 personajes.</li>
-      </ul>
-
-      <h3>Niveles</h3>
-      <ul>
-        <li><strong>Normal</strong> — el nivel con el que nace todo cromo.</li>
-        <li><strong>Especial</strong> — una versión mejorada, con efecto animado.</li>
-        <li><strong>Muy Especial</strong> — la versión máxima, con el personaje en movimiento completo.</li>
-      </ul>
-      <p>Al llegar a <strong>5 cromos</strong> en tu colección, quedás habilitado para que el mod suba de nivel a uno de los tuyos. No perdés ningún cromo por esto.</p>
-
-      <h3>Enfrentamientos entre jugadores</h3>
-      <p>Una vez que ya tenés un cromo (ganado contra Silver), se te habilitan las apuestas contra el resto de la muchachada.</p>
-      <ul>
-        <li>Si querés el personaje de otro jugador, lo podés retar.</li>
-        <li>Él tiene derecho a rechazar la apuesta — en ese caso, ambos se quedan con lo suyo.</li>
-        <li>Si ambos aceptan, cada uno pone su cromo en juego.</li>
-        <li>El ganador se lleva los dos cromos, el perdedor se queda sin el suyo.</li>
-      </ul>
-
-      <h3>Prohibiciones</h3>
-      <p>Está terminantemente prohibido robar o reclamar un cromo que no te pertenece (o intentarlo).</p>
-      <p><strong>Consecuencias:</strong></p>
-      <ul>
-        <li>Se te confisca todo el inventario.</li>
-        <li>Quedás inhabilitado para apostar por 3 meses.</li>
-      </ul>
-
-      <h3>Cosas a tener en cuenta</h3>
-      <ul>
-        <li>Si perdés contra Silver, no podés volver a apostar por 3 meses.</li>
-        <li>Si perdés una apuesta contra otro jugador, perdés tu cromo.</li>
-        <li>Robar tiene la misma sanción: confiscación total + 3 meses sin apostar.</li>
-      </ul>
-
-      <h3>Comandos</h3>
-      <table class="rules-table">
-        <tr><th>Comando</th><th>Función</th></tr>
-        <tr><td><code>/inventario [usuario]</code></td><td>Muestra los cromos de un usuario (o los tuyos si no ponés nombre)</td></tr>
-        <tr><td><code>/cromo cromo_id</code></td><td>Muestra info y dueño de un cromo específico</td></tr>
-        <tr><td><code>/lista_cromos</code></td><td>Lista todos los cromos creados y sus dueños</td></tr>
-      </table>
+    <div class="rules" id="reglas-contenido">
+      <p style="color:var(--muted)">Cargando…</p>
+    </div>
+    <div id="reglas-admin" style="display:none;margin-top:18px;">
+      <button class="admin-btn" id="btn-editar-reglas">✏️ Editar reglas</button>
+      <div id="reglas-editor" style="display:none;margin-top:12px;">
+        <textarea id="reglas-textarea" class="admin-textarea"></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px;">
+          <button class="admin-btn admin-btn-save" id="btn-guardar-reglas">Guardar</button>
+          <button class="admin-btn" id="btn-cancelar-reglas">Cancelar</button>
+        </div>
+      </div>
     </div>
   </section>
 
 </main>
 
-<img src="tiara.png" alt="Tiara Basori" class="mascota">
+<img src="tiara.png" alt="Tiara Basori" class="mascota" id="tiara">
 
-<footer>Álbum de Cromos · datos en vivo desde el servidor de Discord</footer>
+<footer>
+  <div id="footer-links"></div>
+  <div>Álbum de Cromos · datos en vivo desde el servidor de Discord</div>
+  <div id="admin-links-panel" style="display:none;margin-top:12px;">
+    <button class="admin-btn" id="btn-editar-links">🔗 Editar links</button>
+    <div id="links-editor" style="display:none;margin-top:10px;text-align:left;max-width:340px;margin-inline:auto;">
+      <label>YouTube<input type="text" id="input-youtube" class="admin-input"></label>
+      <label>Discord<input type="text" id="input-discord" class="admin-input"></label>
+      <label>Twitter/X<input type="text" id="input-twitter" class="admin-input"></label>
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:center;">
+        <button class="admin-btn admin-btn-save" id="btn-guardar-links">Guardar</button>
+        <button class="admin-btn" id="btn-cancelar-links">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</footer>
+
 
 <div class="overlay" id="overlay">
   <div class="modal">
@@ -295,7 +307,19 @@
   <img id="lightbox-img" src="" alt="Cromo en grande">
 </div>
 
+<div class="pw-box" id="pw-box">
+  <div class="card">
+    <h3 style="margin:0 0 6px;">Panel de edición</h3>
+    <p style="color:var(--muted);font-size:13px;margin:0;">Ingresá la contraseña</p>
+    <input type="password" id="pw-input" placeholder="Contraseña">
+    <div class="err" id="pw-error"></div>
+    <button class="admin-btn admin-btn-save" id="pw-confirmar" style="width:100%;">Entrar</button>
+  </div>
+</div>
+
 <script>
+const ADMIN_STATE = { activo: false, password: "" };
+
 const TIER_LABEL = {1:"Normal", 2:"Especial", 3:"Muy Especial"};
 let cromosCache = [];
 
@@ -344,13 +368,15 @@ function abrirModal(c){
   [1,2,3].forEach(n => {
     const img = c.imagenes[String(n)];
     const desbloqueado = n <= c.nivel_actual && img;
+    const esActual = n === c.nivel_actual;
     const box = document.createElement('div');
-    box.className = `level-box l${n} ${desbloqueado ? '' : 'locked'} ${n === c.nivel_actual ? 'current' : ''}`;
+    box.className = `level-box l${n} ${desbloqueado ? '' : 'locked'} ${esActual ? 'current' : ''}`;
     box.innerHTML = `
       <div class="img" style="${desbloqueado ? `background-image:url('${img}')` : ''}">
         ${desbloqueado ? '' : '🔒'}
       </div>
       <div class="lbl">${TIER_LABEL[n]}</div>
+      ${ADMIN_STATE.activo && esActual ? '<button class="admin-btn" style="width:100%;border-radius:0;font-size:11px;padding:6px;">✏️ Reemplazar</button>' : ''}
     `;
     levels.appendChild(box);
 
@@ -360,9 +386,38 @@ function abrirModal(c){
         abrirLightbox(img);
       });
     }
+
+    if(ADMIN_STATE.activo && esActual){
+      const btnEditar = box.querySelector('.admin-btn');
+      btnEditar.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = () => {
+          if(input.files[0]) subirImagenReemplazo(c.id, input.files[0]);
+        };
+        input.click();
+      });
+    }
   });
 
   document.getElementById('overlay').classList.add('open');
+}
+
+async function subirImagenReemplazo(cromoId, file){
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('cromo_id', cromoId);
+  fd.append('imagen', file);
+  const res = await fetch('/api/admin/reemplazar_imagen', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('overlay').classList.remove('open');
+    await cargarAlbum();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo reemplazar'));
+  }
 }
 
 function abrirLightbox(url){
@@ -426,6 +481,118 @@ document.querySelectorAll('nav button').forEach(btn => {
 
 cargarAlbum();
 cargarRanking();
+
+// ---------- Configuración (reglas + links) ----------
+let configCache = null;
+
+async function cargarConfig(){
+  const res = await fetch('/api/config');
+  configCache = await res.json();
+
+  document.getElementById('reglas-contenido').innerHTML = configCache.reglas;
+
+  const footerLinks = document.getElementById('footer-links');
+  footerLinks.innerHTML = '';
+  const { youtube, discord, twitter } = configCache.links;
+  if(youtube) footerLinks.innerHTML += `<a href="${youtube}" target="_blank" rel="noopener">YouTube</a>`;
+  if(discord) footerLinks.innerHTML += `<a href="${discord}" target="_blank" rel="noopener">Discord</a>`;
+  if(twitter) footerLinks.innerHTML += `<a href="${twitter}" target="_blank" rel="noopener">Twitter/X</a>`;
+}
+cargarConfig();
+
+// ---------- Gatillo secreto: 5 clicks en la Tiara ----------
+let clicksTiara = 0;
+let timeoutTiara = null;
+document.getElementById('tiara').addEventListener('click', () => {
+  clicksTiara++;
+  clearTimeout(timeoutTiara);
+  timeoutTiara = setTimeout(() => { clicksTiara = 0; }, 2500);
+  if(clicksTiara >= 5){
+    clicksTiara = 0;
+    document.getElementById('pw-box').classList.add('open');
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-error').textContent = '';
+    document.getElementById('pw-input').focus();
+  }
+});
+
+async function intentarLogin(){
+  const pw = document.getElementById('pw-input').value;
+  const res = await fetch('/api/admin/verificar', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password: pw})
+  });
+  const data = await res.json();
+  if(data.ok){
+    ADMIN_STATE.activo = true;
+    ADMIN_STATE.password = pw;
+    document.getElementById('pw-box').classList.remove('open');
+    document.getElementById('reglas-admin').style.display = 'block';
+    document.getElementById('admin-links-panel').style.display = 'block';
+    document.getElementById('input-youtube').value = configCache.links.youtube || '';
+    document.getElementById('input-discord').value = configCache.links.discord || '';
+    document.getElementById('input-twitter').value = configCache.links.twitter || '';
+  } else {
+    document.getElementById('pw-error').textContent = 'Contraseña incorrecta';
+  }
+}
+document.getElementById('pw-confirmar').addEventListener('click', intentarLogin);
+document.getElementById('pw-input').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') intentarLogin();
+});
+
+// ---------- Editor de reglas ----------
+document.getElementById('btn-editar-reglas').addEventListener('click', () => {
+  document.getElementById('reglas-textarea').value = configCache.reglas;
+  document.getElementById('reglas-editor').style.display = 'block';
+});
+document.getElementById('btn-cancelar-reglas').addEventListener('click', () => {
+  document.getElementById('reglas-editor').style.display = 'none';
+});
+document.getElementById('btn-guardar-reglas').addEventListener('click', async () => {
+  const contenido = document.getElementById('reglas-textarea').value;
+  const res = await fetch('/api/admin/reglas', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password: ADMIN_STATE.password, contenido})
+  });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('reglas-editor').style.display = 'none';
+    await cargarConfig();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
+
+// ---------- Editor de links ----------
+document.getElementById('btn-editar-links').addEventListener('click', () => {
+  document.getElementById('links-editor').style.display = 'block';
+});
+document.getElementById('btn-cancelar-links').addEventListener('click', () => {
+  document.getElementById('links-editor').style.display = 'none';
+});
+document.getElementById('btn-guardar-links').addEventListener('click', async () => {
+  const body = {
+    password: ADMIN_STATE.password,
+    youtube: document.getElementById('input-youtube').value,
+    discord: document.getElementById('input-discord').value,
+    twitter: document.getElementById('input-twitter').value,
+  };
+  const res = await fetch('/api/admin/links', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('links-editor').style.display = 'none';
+    await cargarConfig();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
 </script>
 
 </body>
