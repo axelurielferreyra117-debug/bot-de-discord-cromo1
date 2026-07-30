@@ -1,3 +1,5 @@
+import io
+import json
 import os
 import sqlite3
 import threading
@@ -10,6 +12,7 @@ from discord.ext import commands
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 MOD_ROLE_ID = int(os.environ["MOD_ROLE_ID"])
 PORT = int(os.environ.get("PORT", 10000))
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Muchachada574!")
 
 # ---------- Base de datos (SQLite) ----------
 DB_PATH = "cromos.db"
@@ -52,7 +55,27 @@ def get_db():
     conn.execute(
         "UPDATE cromos SET imagen_nivel1 = imagen_url WHERE imagen_nivel1 IS NULL"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)"
+    )
     return conn
+
+
+def get_config(clave: str, default: str = "") -> str:
+    conn = get_db()
+    row = conn.execute("SELECT valor FROM config WHERE clave = ?", (clave,)).fetchone()
+    conn.close()
+    return row[0] if row else default
+
+
+def set_config(clave: str, valor: str):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO config (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor",
+        (clave, valor),
+    )
+    conn.commit()
+    conn.close()
 
 
 def crear_cromo(nombre: str, imagen_url: str, creado_por: int, owner_id: int, owner_username: str) -> int:
@@ -106,6 +129,24 @@ def borrar_cromo(cromo_id: int) -> bool:
     ok = cur.rowcount > 0
     conn.close()
     return ok
+
+
+def reemplazar_imagen(cromo_id: int, nueva_imagen_url: str):
+    """Reemplaza la imagen del nivel ACTUAL de un cromo (por si el link viejo se rompió), sin cambiar el nivel."""
+    conn = get_db()
+    row = conn.execute("SELECT nivel FROM cromos WHERE id = ?", (cromo_id,)).fetchone()
+    if row is None:
+        conn.close()
+        return None
+    nivel_actual = row[0]
+    columna_nivel = f"imagen_nivel{nivel_actual}"
+    conn.execute(
+        f"UPDATE cromos SET imagen_url = ?, {columna_nivel} = ? WHERE id = ?",
+        (nueva_imagen_url, nueva_imagen_url, cromo_id),
+    )
+    conn.commit()
+    conn.close()
+    return nivel_actual
 
 
 def subir_nivel(cromo_id: int, nueva_imagen_url: str):
@@ -173,6 +214,43 @@ def candidatos_upgrade(minimo: int = 5):
     ).fetchall()
     conn.close()
     return rows
+
+
+def exportar_todo():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, nombre, imagen_url, owner_id, owner_username, creado_por, nivel,
+               imagen_nivel1, imagen_nivel2, imagen_nivel3
+        FROM cromos ORDER BY id
+        """
+    ).fetchall()
+    conn.close()
+    columnas = [
+        "id", "nombre", "imagen_url", "owner_id", "owner_username", "creado_por",
+        "nivel", "imagen_nivel1", "imagen_nivel2", "imagen_nivel3",
+    ]
+    return [dict(zip(columnas, row)) for row in rows]
+
+
+def importar_todo(datos: list) -> int:
+    conn = get_db()
+    for c in datos:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO cromos
+                (id, nombre, imagen_url, owner_id, owner_username, creado_por, nivel,
+                 imagen_nivel1, imagen_nivel2, imagen_nivel3)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                c["id"], c["nombre"], c["imagen_url"], c["owner_id"], c["owner_username"],
+                c["creado_por"], c["nivel"], c["imagen_nivel1"], c["imagen_nivel2"], c["imagen_nivel3"],
+            ),
+        )
+    conn.commit()
+    conn.close()
+    return len(datos)
 
 
 # ---------- Bot de Discord ----------
@@ -297,6 +375,35 @@ async def borrar_cromo_cmd(interaction: discord.Interaction, cromo_id: int):
     await interaction.response.send_message(f"🗑️ Se borró el cromo #{cromo_id} (**{nombre}**) para siempre.")
 
 
+@bot.tree.command(name="reemplazar_imagen", description="Reemplaza la imagen de un cromo si el link se rompió, sin cambiar su nivel (solo mods)")
+@app_commands.describe(cromo_id="ID del cromo con la imagen rota", imagen="Imagen nueva para reemplazar")
+async def reemplazar_imagen_cmd(interaction: discord.Interaction, cromo_id: int, imagen: discord.Attachment):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden hacer esto.", ephemeral=True
+        )
+        return
+
+    cromo = obtener_cromo(cromo_id)
+    if cromo is None:
+        await interaction.response.send_message(f"No existe el cromo #{cromo_id}.", ephemeral=True)
+        return
+
+    if not (imagen.content_type or "").startswith("image/"):
+        await interaction.response.send_message("El archivo adjunto tiene que ser una imagen.", ephemeral=True)
+        return
+
+    _, nombre, _, owner_id, nivel = cromo
+    reemplazar_imagen(cromo_id, imagen.url)
+
+    embed = discord.Embed(
+        title=f"Cromo #{cromo_id}: {nombre}",
+        description=f"Dueño: <@{owner_id}>\nNivel: {etiqueta_nivel(nivel)} (imagen reemplazada)",
+    )
+    embed.set_image(url=imagen.url)
+    await interaction.response.send_message(content="🔧 Imagen reemplazada.", embed=embed)
+
+
 @bot.tree.command(name="subir_nivel", description="Sube de nivel un cromo, cambiándole la imagen por un GIF (solo mods)")
 @app_commands.describe(cromo_id="ID del cromo a subir de nivel", imagen="Nueva imagen/GIF para el nivel siguiente")
 async def subir_nivel_cmd(interaction: discord.Interaction, cromo_id: int, imagen: discord.Attachment):
@@ -350,6 +457,46 @@ async def candidatos_cmd(interaction: discord.Interaction):
 
     lineas = [f"<@{user_id}> — **{cantidad}** cromos" for user_id, cantidad in filas]
     await interaction.response.send_message("🌟 **Habilitados para subir de nivel un cromo**\n" + "\n".join(lineas))
+
+
+@bot.tree.command(name="exportar_cromos", description="Descarga un respaldo de todos los cromos en un archivo (solo mods)")
+async def exportar_cromos_cmd(interaction: discord.Interaction):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden exportar.", ephemeral=True
+        )
+        return
+
+    datos = exportar_todo()
+    contenido = json.dumps(datos, ensure_ascii=False, indent=2)
+    archivo = discord.File(io.BytesIO(contenido.encode("utf-8")), filename="respaldo_cromos.json")
+    await interaction.response.send_message(
+        content=f"📦 Respaldo con **{len(datos)}** cromo(s). Guardá este archivo — con `/importar_cromos` lo restaurás.",
+        file=archivo,
+    )
+
+
+@bot.tree.command(name="importar_cromos", description="Restaura los cromos desde un archivo de respaldo (solo mods)")
+@app_commands.describe(archivo="El .json generado por /exportar_cromos")
+async def importar_cromos_cmd(interaction: discord.Interaction, archivo: discord.Attachment):
+    if not es_mod(interaction):
+        await interaction.response.send_message(
+            f"Solo miembros con el rol <@&{MOD_ROLE_ID}> pueden importar.", ephemeral=True
+        )
+        return
+
+    try:
+        contenido = await archivo.read()
+        datos = json.loads(contenido.decode("utf-8"))
+    except Exception:
+        await interaction.response.send_message(
+            "No pude leer ese archivo — asegurate de subir el .json generado por /exportar_cromos.",
+            ephemeral=True,
+        )
+        return
+
+    cantidad = importar_todo(datos)
+    await interaction.response.send_message(f"✅ Se restauraron **{cantidad}** cromo(s) desde el respaldo.")
 
 
 @bot.tree.command(name="inventario", description="Muestra el inventario de cromos de un usuario")
@@ -414,9 +561,11 @@ async def lista_cromos(interaction: discord.Interaction):
 
 
 # ---------- Servidor web (Flask): sirve la página y la API, y mantiene Render despierto ----------
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 
 web_app = Flask(__name__, static_folder="static", static_url_path="")
+UPLOADS_DIR = os.path.join("static", "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 @web_app.route("/")
@@ -469,6 +618,109 @@ def api_ranking():
     )
 
 
+REGLAS_DEFAULT = """
+<h3>Cómo se consiguen los cromos</h3>
+<p>Para conseguir tu primer cromo, tenés que retar a <strong>Silver</strong> de alguna de estas formas:</p>
+<ul>
+  <li>Retarlo a una apuesta de anime (uno que <strong>ninguno de los dos</strong> haya visto).</li>
+  <li>Donar 10 USD en YouTube.</li>
+  <li>Retarlo a un juego.</li>
+  <li>Poner tu corona en juego, si sos el <strong>Top 1</strong> → a cambio recibís 2 personajes.</li>
+</ul>
+<h3>Niveles</h3>
+<ul>
+  <li><strong>Normal</strong> — el nivel con el que nace todo cromo.</li>
+  <li><strong>Especial</strong> — una versión mejorada, con efecto animado.</li>
+  <li><strong>Muy Especial</strong> — la versión máxima, con el personaje en movimiento completo.</li>
+</ul>
+<p>Al llegar a <strong>5 cromos</strong> en tu colección, quedás habilitado para que el mod suba de nivel a uno de los tuyos. No perdés ningún cromo por esto.</p>
+<h3>Enfrentamientos entre jugadores</h3>
+<p>Una vez que ya tenés un cromo (ganado contra Silver), se te habilitan las apuestas contra el resto de la muchachada.</p>
+<ul>
+  <li>Si querés el personaje de otro jugador, lo podés retar.</li>
+  <li>Él tiene derecho a rechazar la apuesta — en ese caso, ambos se quedan con lo suyo.</li>
+  <li>Si ambos aceptan, cada uno pone su cromo en juego.</li>
+  <li>El ganador se lleva los dos cromos, el perdedor se queda sin el suyo.</li>
+</ul>
+<h3>Prohibiciones</h3>
+<p>Está terminantemente prohibido robar o reclamar un cromo que no te pertenece (o intentarlo).</p>
+<p><strong>Consecuencias:</strong></p>
+<ul>
+  <li>Se te confisca todo el inventario.</li>
+  <li>Quedás inhabilitado para apostar por 3 meses.</li>
+</ul>
+<h3>Cosas a tener en cuenta</h3>
+<ul>
+  <li>Si perdés contra Silver, no podés volver a apostar por 3 meses.</li>
+  <li>Si perdés una apuesta contra otro jugador, perdés tu cromo.</li>
+  <li>Robar tiene la misma sanción: confiscación total + 3 meses sin apostar.</li>
+</ul>
+"""
+
+
+@web_app.route("/api/config")
+def api_config():
+    reglas = get_config("reglas", REGLAS_DEFAULT)
+    links = get_config("links", '{"youtube":"","discord":"","twitter":""}')
+    return jsonify({"reglas": reglas, "links": json.loads(links)})
+
+
+def _password_valida(pw: str) -> bool:
+    return pw == ADMIN_PASSWORD
+
+
+@web_app.route("/api/admin/verificar", methods=["POST"])
+def api_admin_verificar():
+    data = request.get_json(force=True, silent=True) or {}
+    return jsonify({"ok": _password_valida(data.get("password", ""))})
+
+
+@web_app.route("/api/admin/reglas", methods=["POST"])
+def api_admin_reglas():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+    set_config("reglas", data.get("contenido", ""))
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/links", methods=["POST"])
+def api_admin_links():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+    links = {
+        "youtube": data.get("youtube", ""),
+        "discord": data.get("discord", ""),
+        "twitter": data.get("twitter", ""),
+    }
+    set_config("links", json.dumps(links))
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/reemplazar_imagen", methods=["POST"])
+def api_admin_reemplazar_imagen():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    cromo_id = request.form.get("cromo_id", type=int)
+    archivo = request.files.get("imagen")
+    if not cromo_id or not archivo:
+        return jsonify({"ok": False, "error": "Faltan datos"}), 400
+
+    nombre_archivo = f"cromo{cromo_id}_{int(threading.get_ident())}_{archivo.filename}"
+    ruta_local = os.path.join(UPLOADS_DIR, nombre_archivo)
+    archivo.save(ruta_local)
+    url_publica = f"/uploads/{nombre_archivo}"
+
+    resultado = reemplazar_imagen(cromo_id, url_publica)
+    if resultado is None:
+        return jsonify({"ok": False, "error": "No existe ese cromo"}), 404
+
+    return jsonify({"ok": True, "imagen_url": url_publica})
+
+
 def run_web_server():
     web_app.run(host="0.0.0.0", port=PORT, use_reloader=False)
 
@@ -476,3 +728,4 @@ def run_web_server():
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
     bot.run(DISCORD_TOKEN)
+    
