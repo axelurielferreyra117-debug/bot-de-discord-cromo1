@@ -241,6 +241,34 @@
   .ruleta-opcion-row button{background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;}
   .ruleta-resultado{text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;min-height:28px;color:var(--n3);}
 
+  .avatar-preview-wrap{display:flex;align-items:center;gap:10px;margin-top:6px;}
+  .avatar-preview-circle{
+    width:70px;height:70px;border-radius:50%;background:var(--surface-2) center/cover no-repeat;
+    border:2px dashed var(--azul);flex-shrink:0;
+  }
+
+  .jugador-card{position:relative;}
+  .jugador-card .editar-mini{
+    position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;color:#fff;
+    border-radius:50%;width:26px;height:26px;font-size:12px;cursor:pointer;
+  }
+
+  .perfil-banner{
+    height:180px;border-radius:18px;background:var(--surface-2) center/cover no-repeat;
+    border:1px solid var(--border);position:relative;margin-bottom:56px;
+  }
+  .perfil-avatar{
+    width:104px;height:104px;border-radius:50%;background:var(--surface-2) center/cover no-repeat;
+    border:4px solid var(--bg);position:absolute;bottom:-44px;left:24px;box-shadow:0 4px 14px rgba(0,0,0,.5);
+  }
+  .perfil-info h3{font-size:26px;margin:0 0 10px;text-transform:none;font-family:'Rajdhani',sans-serif;font-weight:700;}
+  .perfil-stats{display:flex;gap:14px;margin-bottom:12px;}
+  .perfil-stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;}
+  .perfil-stat b{display:block;font-family:'Rajdhani',sans-serif;font-size:22px;color:var(--n3);}
+  .perfil-stat span{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;}
+  .perfil-logros{color:#c7cde0;font-size:14px;line-height:1.5;max-width:600px;margin:0 0 14px;white-space:pre-wrap;}
+  .perfil-subtitulo{margin:26px 0 12px;color:var(--muted);font-size:15px;letter-spacing:.03em;}
+
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
 
   .mascota{
@@ -311,7 +339,11 @@
       <div id="form-nuevo-jugador" class="admin-form" style="display:none;">
         <label>Nombre<input type="text" id="nj-nombre" class="admin-input"></label>
         <label>Avatar (opcional)<input type="file" id="nj-avatar" class="admin-input" accept="image/*"></label>
-        <div style="display:flex;gap:8px;">
+        <div class="avatar-preview-wrap" id="nj-preview-wrap" style="display:none;">
+          <div class="avatar-preview-circle" id="nj-preview-circle"></div>
+          <span style="color:var(--muted);font-size:11px;">Así se va a ver — elegí una foto cuadrada/centrada para que quede bien</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="admin-btn admin-btn-save" id="btn-guardar-nuevo-jugador">Crear</button>
           <button class="admin-btn" id="btn-cancelar-nuevo-jugador">Cancelar</button>
         </div>
@@ -322,8 +354,41 @@
 
     <div id="jugador-detalle" style="display:none;">
       <button class="admin-btn" id="btn-volver-jugadores" style="margin-bottom:16px;">← Volver a perfiles</button>
-      <h3 id="jugador-detalle-nombre" style="font-size:22px;margin-bottom:12px;"></h3>
-      <div id="jugador-detalle-grid" class="grid"></div>
+
+      <div class="perfil-banner" id="perfil-banner">
+        <div class="perfil-avatar" id="perfil-avatar"></div>
+      </div>
+      <div class="perfil-info">
+        <h3 id="jugador-detalle-nombre"></h3>
+        <div class="perfil-stats">
+          <div class="perfil-stat"><b id="perfil-victorias">0</b><span>Victorias</span></div>
+          <div class="perfil-stat"><b id="perfil-racha">0</b><span>Racha actual</span></div>
+        </div>
+        <p class="perfil-logros" id="perfil-logros"></p>
+        <button class="admin-btn" id="btn-editar-perfil" style="display:none;margin-bottom:10px;">✏️ Editar perfil</button>
+        <div id="form-editar-jugador" class="admin-form" style="display:none;max-width:420px;">
+          <label>Nuevo nombre<input type="text" id="ej-nombre" class="admin-input"></label>
+          <label>Nuevo avatar (opcional)<input type="file" id="ej-avatar" class="admin-input" accept="image/*"></label>
+          <div class="avatar-preview-wrap" id="ej-preview-wrap" style="display:none;">
+            <div class="avatar-preview-circle" id="ej-preview-circle"></div>
+          </div>
+          <label>Nuevo banner (opcional)<input type="file" id="ej-banner" class="admin-input" accept="image/*"></label>
+          <label>Victorias<input type="number" id="ej-victorias" class="admin-input"></label>
+          <label>Racha actual<input type="number" id="ej-racha" class="admin-input"></label>
+          <label>Logros / notas<textarea id="ej-logros" class="admin-textarea" style="min-height:80px;"></textarea></label>
+          <div style="display:flex;gap:8px;">
+            <button class="admin-btn admin-btn-save" id="btn-guardar-editar-jugador">Guardar</button>
+            <button class="admin-btn" id="btn-cancelar-editar-jugador">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <h4 class="perfil-subtitulo">⚪ Normales</h4>
+      <div id="jugador-detalle-grid-1" class="grid"></div>
+      <h4 class="perfil-subtitulo">🟣 Especiales</h4>
+      <div id="jugador-detalle-grid-2" class="grid"></div>
+      <h4 class="perfil-subtitulo">🟡 Muy Especiales</h4>
+      <div id="jugador-detalle-grid-3" class="grid"></div>
     </div>
   </section>
 
@@ -486,7 +551,10 @@ function abrirModal(c){
         ${desbloqueado ? '' : '🔒'}
       </div>
       <div class="lbl">${TIER_LABEL[n]}</div>
-      ${ADMIN_STATE.activo && esActual ? '<button class="admin-btn" style="width:100%;border-radius:0;font-size:11px;padding:6px;">✏️ Reemplazar</button>' : ''}
+      ${ADMIN_STATE.activo && esActual ? `
+        <button class="admin-btn btn-reemplazar" style="width:100%;border-radius:0;font-size:11px;padding:6px;">✏️ Reemplazar</button>
+        ${c.nivel_actual < 3 ? '<button class="admin-btn admin-btn-save btn-subir-nivel" style="width:100%;border-radius:0;font-size:11px;padding:6px;">⬆️ Subir de nivel</button>' : ''}
+      ` : ''}
     `;
     levels.appendChild(box);
 
@@ -498,8 +566,7 @@ function abrirModal(c){
     }
 
     if(ADMIN_STATE.activo && esActual){
-      const btnEditar = box.querySelector('.admin-btn');
-      btnEditar.addEventListener('click', (e) => {
+      box.querySelector('.btn-reemplazar').addEventListener('click', (e) => {
         e.stopPropagation();
         const input = document.createElement('input');
         input.type = 'file';
@@ -509,6 +576,19 @@ function abrirModal(c){
         };
         input.click();
       });
+      const btnSubirNivel = box.querySelector('.btn-subir-nivel');
+      if(btnSubirNivel){
+        btnSubirNivel.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/*';
+          input.onchange = () => {
+            if(input.files[0]) subirDeNivel(c.id, input.files[0]);
+          };
+          input.click();
+        });
+      }
     }
   });
 
@@ -527,6 +607,21 @@ async function subirImagenReemplazo(cromoId, file){
     await cargarAlbum();
   } else {
     alert('Error: ' + (data.error || 'no se pudo reemplazar'));
+  }
+}
+
+async function subirDeNivel(cromoId, file){
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('cromo_id', cromoId);
+  fd.append('imagen', file);
+  const res = await fetch('/api/admin/subir_nivel', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('overlay').classList.remove('open');
+    await cargarAlbum();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo subir de nivel'));
   }
 }
 
@@ -646,6 +741,7 @@ async function intentarLogin(){
     document.getElementById('input-youtube').value = configCache.links.youtube || '';
     document.getElementById('input-discord').value = configCache.links.discord || '';
     document.getElementById('input-twitter').value = configCache.links.twitter || '';
+    await cargarJugadores();
   } else {
     document.getElementById('pw-error').textContent = 'Contraseña incorrecta';
   }
@@ -776,35 +872,81 @@ async function cargarJugadores(){
     const card = document.createElement('div');
     card.className = 'jugador-card';
     card.innerHTML = `
+      ${ADMIN_STATE.activo ? '<button class="editar-mini" title="Editar">✏️</button>' : ''}
       <div class="jugador-avatar" style="${j.avatar_url ? `background-image:url('${j.avatar_url}')` : ''}"></div>
       <h4>${escapeHtml(j.nombre)}</h4>
       <span>${j.cantidad} cromo(s)</span>
     `;
     card.addEventListener('click', () => verPerfilJugador(j.nombre));
+    if(ADMIN_STATE.activo){
+      card.querySelector('.editar-mini').addEventListener('click', (e) => {
+        e.stopPropagation();
+        verPerfilJugador(j.nombre).then(() => mostrarEditorJugador(j.nombre));
+      });
+    }
     grid.appendChild(card);
   });
 }
 cargarJugadores();
 
+function agruparPorNivel(data){
+  return {
+    1: data.filter(c => c.nivel_actual === 1),
+    2: data.filter(c => c.nivel_actual === 2),
+    3: data.filter(c => c.nivel_actual === 3),
+  };
+}
+
 async function verPerfilJugador(nombre){
-  const res = await fetch(`/api/jugadores/${encodeURIComponent(nombre)}/cromos`);
-  const data = await res.json();
+  const [resPerfil, resCromos] = await Promise.all([
+    fetch(`/api/jugadores/${encodeURIComponent(nombre)}/perfil`),
+    fetch(`/api/jugadores/${encodeURIComponent(nombre)}/cromos`),
+  ]);
+  const perfil = await resPerfil.json();
+  const cromos = await resCromos.json();
 
   document.getElementById('jugadores-grid').style.display = 'none';
   document.getElementById('jugador-detalle').style.display = 'block';
-  document.getElementById('jugador-detalle-nombre').textContent = nombre;
+  document.getElementById('form-editar-jugador').style.display = 'none';
 
-  const grid = document.getElementById('jugador-detalle-grid');
-  if(data.length === 0){
-    grid.innerHTML = '<p style="color:var(--muted);">Todavía no tiene cromos.</p>';
-  } else {
-    renderTarjetas(data, grid);
-  }
+  document.getElementById('jugador-detalle-nombre').textContent = perfil.nombre || nombre;
+  document.getElementById('perfil-banner').style.backgroundImage = perfil.banner_url ? `url('${perfil.banner_url}')` : '';
+  document.getElementById('perfil-avatar').style.backgroundImage = perfil.avatar_url ? `url('${perfil.avatar_url}')` : '';
+  document.getElementById('perfil-victorias').textContent = perfil.victorias || 0;
+  document.getElementById('perfil-racha').textContent = perfil.racha || 0;
+  document.getElementById('perfil-logros').textContent = perfil.logros || '';
+
+  const btnEditar = document.getElementById('btn-editar-perfil');
+  btnEditar.style.display = ADMIN_STATE.activo ? 'inline-block' : 'none';
+  btnEditar.onclick = () => mostrarEditorJugador(nombre);
+
+  const grupos = agruparPorNivel(cromos);
+  [1,2,3].forEach(n => {
+    const cont = document.getElementById(`jugador-detalle-grid-${n}`);
+    if(grupos[n].length === 0){
+      cont.innerHTML = '<p style="color:var(--muted);font-size:13px;">— ninguno —</p>';
+    } else {
+      renderTarjetas(grupos[n], cont);
+    }
+  });
 }
 document.getElementById('btn-volver-jugadores').addEventListener('click', () => {
   document.getElementById('jugador-detalle').style.display = 'none';
   document.getElementById('jugadores-grid').style.display = 'grid';
 });
+
+function previsualizarAvatar(inputId, wrapId, circleId){
+  document.getElementById(inputId).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    const wrap = document.getElementById(wrapId);
+    if(!file){ wrap.style.display = 'none'; return; }
+    const url = URL.createObjectURL(file);
+    document.getElementById(circleId).style.backgroundImage = `url('${url}')`;
+    wrap.style.display = 'flex';
+  });
+}
+previsualizarAvatar('nj-avatar', 'nj-preview-wrap', 'nj-preview-circle');
+previsualizarAvatar('ej-avatar', 'ej-preview-wrap', 'ej-preview-circle');
 
 // ---------- Crear jugador (perfil) desde la web (admin) ----------
 document.getElementById('btn-nuevo-jugador').addEventListener('click', () => {
@@ -829,9 +971,56 @@ document.getElementById('btn-guardar-nuevo-jugador').addEventListener('click', a
     document.getElementById('form-nuevo-jugador').style.display = 'none';
     document.getElementById('nj-nombre').value = '';
     document.getElementById('nj-avatar').value = '';
+    document.getElementById('nj-preview-wrap').style.display = 'none';
     await cargarJugadores();
   } else {
     alert('Error: ' + (data.error || 'no se pudo crear'));
+  }
+});
+
+// ---------- Editar jugador (perfil) desde el detalle (admin) ----------
+let jugadorEditandoNombre = null;
+
+async function mostrarEditorJugador(nombre){
+  jugadorEditandoNombre = nombre;
+  const res = await fetch(`/api/jugadores/${encodeURIComponent(nombre)}/perfil`);
+  const perfil = await res.json();
+
+  document.getElementById('ej-nombre').value = perfil.nombre || nombre;
+  document.getElementById('ej-victorias').value = perfil.victorias || 0;
+  document.getElementById('ej-racha').value = perfil.racha || 0;
+  document.getElementById('ej-logros').value = perfil.logros || '';
+  document.getElementById('ej-avatar').value = '';
+  document.getElementById('ej-banner').value = '';
+  document.getElementById('ej-preview-wrap').style.display = perfil.avatar_url ? 'flex' : 'none';
+  if(perfil.avatar_url) document.getElementById('ej-preview-circle').style.backgroundImage = `url('${perfil.avatar_url}')`;
+
+  document.getElementById('form-editar-jugador').style.display = 'block';
+}
+document.getElementById('btn-cancelar-editar-jugador').addEventListener('click', () => {
+  document.getElementById('form-editar-jugador').style.display = 'none';
+});
+document.getElementById('btn-guardar-editar-jugador').addEventListener('click', async () => {
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('nombre_actual', jugadorEditandoNombre);
+  fd.append('nuevo_nombre', document.getElementById('ej-nombre').value.trim());
+  fd.append('victorias', document.getElementById('ej-victorias').value || 0);
+  fd.append('racha', document.getElementById('ej-racha').value || 0);
+  fd.append('logros', document.getElementById('ej-logros').value);
+  const avatar = document.getElementById('ej-avatar').files[0];
+  const banner = document.getElementById('ej-banner').files[0];
+  if(avatar) fd.append('avatar', avatar);
+  if(banner) fd.append('banner', banner);
+
+  const res = await fetch('/api/admin/editar_jugador', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('form-editar-jugador').style.display = 'none';
+    await cargarJugadores();
+    await verPerfilJugador(data.nombre);
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo editar'));
   }
 });
 
