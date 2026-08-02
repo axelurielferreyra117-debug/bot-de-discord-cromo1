@@ -61,6 +61,16 @@ def get_db():
     conn.execute(
         "CREATE TABLE IF NOT EXISTS jugadores (nombre TEXT PRIMARY KEY, avatar_url TEXT)"
     )
+    for columna, tipo in [
+        ("banner_url", "TEXT"),
+        ("victorias", "INTEGER NOT NULL DEFAULT 0"),
+        ("racha", "INTEGER NOT NULL DEFAULT 0"),
+        ("logros", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE jugadores ADD COLUMN {columna} {tipo}")
+        except sqlite3.OperationalError:
+            pass
     return conn
 
 
@@ -75,6 +85,55 @@ def upsert_jugador(nombre: str, avatar_url: str = None):
         conn.execute("UPDATE jugadores SET avatar_url = ? WHERE nombre = ?", (avatar_url, nombre))
     conn.commit()
     conn.close()
+
+
+def obtener_jugador(nombre: str):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT nombre, avatar_url, banner_url, victorias, racha, logros FROM jugadores WHERE nombre = ?",
+        (nombre,),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str = None,
+                    banner_url: str = None, victorias: int = None, racha: int = None, logros: str = None):
+    conn = get_db()
+    actual = conn.execute("SELECT * FROM jugadores WHERE nombre = ?", (nombre_actual,)).fetchone()
+    if actual is None:
+        conn.close()
+        return False
+
+    nombre_final = nuevo_nombre.strip() if nuevo_nombre and nuevo_nombre.strip() else nombre_actual
+
+    if nombre_final != nombre_actual:
+        existe_destino = conn.execute("SELECT 1 FROM jugadores WHERE nombre = ?", (nombre_final,)).fetchone()
+        if existe_destino:
+            conn.close()
+            return False
+        conn.execute("UPDATE jugadores SET nombre = ? WHERE nombre = ?", (nombre_final, nombre_actual))
+        conn.execute("UPDATE cromos SET owner_username = ? WHERE owner_username = ?", (nombre_final, nombre_actual))
+
+    campos, valores = [], []
+    if avatar_url is not None:
+        campos.append("avatar_url = ?"); valores.append(avatar_url)
+    if banner_url is not None:
+        campos.append("banner_url = ?"); valores.append(banner_url)
+    if victorias is not None:
+        campos.append("victorias = ?"); valores.append(victorias)
+    if racha is not None:
+        campos.append("racha = ?"); valores.append(racha)
+    if logros is not None:
+        campos.append("logros = ?"); valores.append(logros)
+
+    if campos:
+        valores.append(nombre_final)
+        conn.execute(f"UPDATE jugadores SET {', '.join(campos)} WHERE nombre = ?", valores)
+
+    conn.commit()
+    conn.close()
+    return True
 
 
 def listar_jugadores():
@@ -768,6 +827,28 @@ def api_admin_reemplazar_imagen():
     return jsonify({"ok": True, "imagen_url": url_publica})
 
 
+@web_app.route("/api/admin/subir_nivel", methods=["POST"])
+def api_admin_subir_nivel():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    cromo_id = request.form.get("cromo_id", type=int)
+    archivo = request.files.get("imagen")
+    if not cromo_id or not archivo:
+        return jsonify({"ok": False, "error": "Faltan datos"}), 400
+
+    nombre_archivo = f"cromo{cromo_id}_nivel_{int(threading.get_ident())}_{archivo.filename}"
+    archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
+    url_publica = f"/uploads/{nombre_archivo}"
+
+    nuevo_nivel = subir_nivel(cromo_id, url_publica)
+    if nuevo_nivel is None:
+        return jsonify({"ok": False, "error": "No existe el cromo o ya está en nivel máximo"}), 400
+
+    return jsonify({"ok": True, "nivel": nuevo_nivel, "imagen_url": url_publica})
+
+
 @web_app.route("/api/jugadores")
 def api_jugadores():
     filas = listar_jugadores()
@@ -792,6 +873,18 @@ def api_jugador_cromos(nombre):
     return jsonify(resultado)
 
 
+@web_app.route("/api/jugadores/<nombre>/perfil")
+def api_jugador_perfil(nombre):
+    row = obtener_jugador(nombre)
+    if row is None:
+        return jsonify({"ok": False, "error": "No existe"}), 404
+    n, avatar, banner, victorias, racha, logros = row
+    return jsonify({
+        "nombre": n, "avatar_url": avatar, "banner_url": banner,
+        "victorias": victorias, "racha": racha, "logros": logros or "",
+    })
+
+
 @web_app.route("/api/admin/crear_jugador", methods=["POST"])
 def api_admin_crear_jugador():
     password = request.form.get("password", "")
@@ -811,6 +904,45 @@ def api_admin_crear_jugador():
 
     upsert_jugador(nombre, avatar_url)
     return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/editar_jugador", methods=["POST"])
+def api_admin_editar_jugador():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    nombre_actual = (request.form.get("nombre_actual") or "").strip()
+    nuevo_nombre = request.form.get("nuevo_nombre")
+    if not nombre_actual:
+        return jsonify({"ok": False, "error": "Falta el jugador"}), 400
+
+    avatar_url = None
+    archivo = request.files.get("avatar")
+    if archivo and archivo.filename:
+        nombre_archivo = f"avatar_{nombre_actual}_{int(threading.get_ident())}_{archivo.filename}"
+        archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
+        avatar_url = f"/uploads/{nombre_archivo}"
+
+    banner_url = None
+    banner = request.files.get("banner")
+    if banner and banner.filename:
+        nombre_archivo_b = f"banner_{nombre_actual}_{int(threading.get_ident())}_{banner.filename}"
+        banner.save(os.path.join(UPLOADS_DIR, nombre_archivo_b))
+        banner_url = f"/uploads/{nombre_archivo_b}"
+
+    victorias = request.form.get("victorias", type=int)
+    racha = request.form.get("racha", type=int)
+    logros = request.form.get("logros")
+
+    ok = editar_jugador(
+        nombre_actual, nuevo_nombre=nuevo_nombre, avatar_url=avatar_url, banner_url=banner_url,
+        victorias=victorias, racha=racha, logros=logros,
+    )
+    if not ok:
+        return jsonify({"ok": False, "error": "No se pudo editar (¿nombre repetido?)"}), 400
+
+    return jsonify({"ok": True, "nombre": (nuevo_nombre.strip() if nuevo_nombre and nuevo_nombre.strip() else nombre_actual)})
 
 
 @web_app.route("/api/admin/crear_cromo", methods=["POST"])
