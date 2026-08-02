@@ -58,7 +58,51 @@ def get_db():
     conn.execute(
         "CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)"
     )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS jugadores (nombre TEXT PRIMARY KEY, avatar_url TEXT)"
+    )
     return conn
+
+
+def upsert_jugador(nombre: str, avatar_url: str = None):
+    if not nombre:
+        return
+    conn = get_db()
+    existente = conn.execute("SELECT avatar_url FROM jugadores WHERE nombre = ?", (nombre,)).fetchone()
+    if existente is None:
+        conn.execute("INSERT INTO jugadores (nombre, avatar_url) VALUES (?, ?)", (nombre, avatar_url))
+    elif avatar_url is not None:
+        conn.execute("UPDATE jugadores SET avatar_url = ? WHERE nombre = ?", (avatar_url, nombre))
+    conn.commit()
+    conn.close()
+
+
+def listar_jugadores():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT j.nombre, j.avatar_url, COUNT(c.id) as cantidad
+        FROM jugadores j
+        LEFT JOIN cromos c ON c.owner_username = j.nombre
+        GROUP BY j.nombre
+        ORDER BY cantidad DESC, j.nombre ASC
+        """
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def cromos_de_jugador(nombre: str):
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT id, nombre, owner_id, owner_username, nivel, imagen_nivel1, imagen_nivel2, imagen_nivel3
+        FROM cromos WHERE owner_username = ? ORDER BY id
+        """,
+        (nombre,),
+    ).fetchall()
+    conn.close()
+    return rows
 
 
 def get_config(clave: str, default: str = "") -> str:
@@ -90,6 +134,7 @@ def crear_cromo(nombre: str, imagen_url: str, creado_por: int, owner_id: int, ow
     conn.commit()
     cromo_id = cur.lastrowid
     conn.close()
+    upsert_jugador(owner_username)
     return cromo_id
 
 
@@ -110,6 +155,7 @@ def asignar_cromo(cromo_id: int, user_id: int, username: str) -> bool:
     conn.commit()
     ok = cur.rowcount > 0
     conn.close()
+    upsert_jugador(username)
     return ok
 
 
@@ -561,7 +607,7 @@ async def lista_cromos(interaction: discord.Interaction):
 
 
 # ---------- Servidor web (Flask): sirve la página y la API, y mantiene Render despierto ----------
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 web_app = Flask(__name__, static_folder="static", static_url_path="")
 UPLOADS_DIR = os.path.join("static", "uploads")
@@ -605,17 +651,18 @@ def api_ranking():
     conn = get_db()
     rows = conn.execute(
         """
-        SELECT owner_id, owner_username, COUNT(*) as cantidad
+        SELECT owner_username, COUNT(*) as cantidad
         FROM cromos
-        WHERE owner_id IS NOT NULL
-        GROUP BY owner_id
+        WHERE owner_username IS NOT NULL AND owner_username != ''
+        GROUP BY owner_username
         ORDER BY cantidad DESC
         """
     ).fetchall()
     conn.close()
     return jsonify(
-        [{"owner_id": r[0], "owner_username": r[1], "cantidad": r[2]} for r in rows]
+        [{"owner_username": r[0], "cantidad": r[1]} for r in rows]
     )
+
 
 
 REGLAS_DEFAULT = """
@@ -721,6 +768,128 @@ def api_admin_reemplazar_imagen():
     return jsonify({"ok": True, "imagen_url": url_publica})
 
 
+@web_app.route("/api/jugadores")
+def api_jugadores():
+    filas = listar_jugadores()
+    return jsonify([{"nombre": n, "avatar_url": a, "cantidad": c} for n, a, c in filas])
+
+
+@web_app.route("/api/jugadores/<nombre>/cromos")
+def api_jugador_cromos(nombre):
+    rows = cromos_de_jugador(nombre)
+    resultado = []
+    for cid, cnombre, owner_id, owner_username, nivel, i1, i2, i3 in rows:
+        resultado.append(
+            {
+                "id": cid,
+                "nombre": cnombre,
+                "nivel_actual": nivel,
+                "owner_id": owner_id,
+                "owner_username": owner_username,
+                "imagenes": {"1": i1, "2": i2, "3": i3},
+            }
+        )
+    return jsonify(resultado)
+
+
+@web_app.route("/api/admin/crear_jugador", methods=["POST"])
+def api_admin_crear_jugador():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    nombre = (request.form.get("nombre") or "").strip()
+    if not nombre:
+        return jsonify({"ok": False, "error": "Falta el nombre"}), 400
+
+    avatar_url = None
+    archivo = request.files.get("avatar")
+    if archivo and archivo.filename:
+        nombre_archivo = f"avatar_{nombre}_{int(threading.get_ident())}_{archivo.filename}"
+        archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
+        avatar_url = f"/uploads/{nombre_archivo}"
+
+    upsert_jugador(nombre, avatar_url)
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/crear_cromo", methods=["POST"])
+def api_admin_crear_cromo():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    nombre = (request.form.get("nombre") or "").strip()
+    dueno = (request.form.get("dueno") or "").strip()
+    archivo = request.files.get("imagen")
+    if not nombre or not archivo:
+        return jsonify({"ok": False, "error": "Falta el nombre o la imagen"}), 400
+
+    nombre_archivo = f"nuevo_{int(threading.get_ident())}_{archivo.filename}"
+    archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
+    url_publica = f"/uploads/{nombre_archivo}"
+
+    cromo_id = crear_cromo(nombre, url_publica, 0, None, dueno or None)
+    return jsonify({"ok": True, "cromo_id": cromo_id})
+
+
+@web_app.route("/api/admin/cambiar_dueno", methods=["POST"])
+def api_admin_cambiar_dueno():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    cromo_id = data.get("cromo_id")
+    nuevo_dueno = (data.get("dueno") or "").strip()
+    if not cromo_id:
+        return jsonify({"ok": False, "error": "Falta el cromo"}), 400
+
+    conn = get_db()
+    conn.execute(
+        "UPDATE cromos SET owner_id = NULL, owner_username = ? WHERE id = ?",
+        (nuevo_dueno or None, cromo_id),
+    )
+    conn.commit()
+    conn.close()
+    if nuevo_dueno:
+        upsert_jugador(nuevo_dueno)
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/exportar")
+def api_admin_exportar():
+    password = request.args.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    datos = exportar_todo()
+    contenido = json.dumps(datos, ensure_ascii=False, indent=2)
+    return Response(
+        contenido,
+        mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=respaldo_cromos.json"},
+    )
+
+
+@web_app.route("/api/admin/importar", methods=["POST"])
+def api_admin_importar():
+    password = request.form.get("password", "")
+    if not _password_valida(password):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    archivo = request.files.get("archivo")
+    if not archivo:
+        return jsonify({"ok": False, "error": "Falta el archivo"}), 400
+
+    try:
+        datos = json.loads(archivo.read().decode("utf-8"))
+    except Exception:
+        return jsonify({"ok": False, "error": "El archivo no es un respaldo válido"}), 400
+
+    cantidad = importar_todo(datos)
+    return jsonify({"ok": True, "cantidad": cantidad})
+
+
 def run_web_server():
     web_app.run(host="0.0.0.0", port=PORT, use_reloader=False)
 
@@ -728,4 +897,3 @@ def run_web_server():
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
     bot.run(DISCORD_TOKEN)
-    
