@@ -243,8 +243,8 @@
 
   .avatar-preview-wrap{display:flex;align-items:center;gap:10px;margin-top:6px;}
   .avatar-preview-circle{
-    width:70px;height:70px;border-radius:50%;background:var(--surface-2) center/cover no-repeat;
-    border:2px dashed var(--azul);flex-shrink:0;
+    width:110px;height:110px;border-radius:50%;background:var(--surface-2) center/cover no-repeat;
+    border:2px dashed var(--azul);flex-shrink:0;user-select:none;touch-action:none;
   }
 
   .jugador-card{position:relative;}
@@ -873,7 +873,7 @@ async function cargarJugadores(){
     card.className = 'jugador-card';
     card.innerHTML = `
       ${ADMIN_STATE.activo ? '<button class="editar-mini" title="Editar">✏️</button>' : ''}
-      <div class="jugador-avatar" style="${j.avatar_url ? `background-image:url('${j.avatar_url}')` : ''}"></div>
+      <div class="jugador-avatar" style="${j.avatar_url ? `background-image:url('${j.avatar_url}');background-position:${j.avatar_pos_x}% ${j.avatar_pos_y}%` : ''}"></div>
       <h4>${escapeHtml(j.nombre)}</h4>
       <span>${j.cantidad} cromo(s)</span>
     `;
@@ -912,6 +912,7 @@ async function verPerfilJugador(nombre){
   document.getElementById('jugador-detalle-nombre').textContent = perfil.nombre || nombre;
   document.getElementById('perfil-banner').style.backgroundImage = perfil.banner_url ? `url('${perfil.banner_url}')` : '';
   document.getElementById('perfil-avatar').style.backgroundImage = perfil.avatar_url ? `url('${perfil.avatar_url}')` : '';
+  document.getElementById('perfil-avatar').style.backgroundPosition = `${perfil.avatar_pos_x ?? 50}% ${perfil.avatar_pos_y ?? 50}%`;
   document.getElementById('perfil-victorias').textContent = perfil.victorias || 0;
   document.getElementById('perfil-racha').textContent = perfil.racha || 0;
   document.getElementById('perfil-logros').textContent = perfil.logros || '';
@@ -935,18 +936,56 @@ document.getElementById('btn-volver-jugadores').addEventListener('click', () => 
   document.getElementById('jugadores-grid').style.display = 'grid';
 });
 
-function previsualizarAvatar(inputId, wrapId, circleId){
+let njAvatarPos = { x: 50, y: 50 };
+let ejAvatarPos = { x: 50, y: 50 };
+
+function habilitarArrastre(circleId, posObj){
+  const el = document.getElementById(circleId);
+  let arrastrando = false;
+  let inicio = { x: 0, y: 0 };
+  let posInicio = { x: 50, y: 50 };
+
+  function empezar(clientX, clientY){
+    arrastrando = true;
+    inicio = { x: clientX, y: clientY };
+    posInicio = { x: posObj.x, y: posObj.y };
+  }
+  function mover(clientX, clientY){
+    if(!arrastrando) return;
+    const rect = el.getBoundingClientRect();
+    const dx = ((clientX - inicio.x) / rect.width) * 100;
+    const dy = ((clientY - inicio.y) / rect.height) * 100;
+    posObj.x = Math.min(100, Math.max(0, posInicio.x - dx));
+    posObj.y = Math.min(100, Math.max(0, posInicio.y - dy));
+    el.style.backgroundPosition = `${posObj.x}% ${posObj.y}%`;
+  }
+  function terminar(){ arrastrando = false; }
+
+  el.style.cursor = 'grab';
+  el.addEventListener('mousedown', (e) => { empezar(e.clientX, e.clientY); e.preventDefault(); });
+  window.addEventListener('mousemove', (e) => mover(e.clientX, e.clientY));
+  window.addEventListener('mouseup', terminar);
+  el.addEventListener('touchstart', (e) => { const t = e.touches[0]; empezar(t.clientX, t.clientY); }, { passive: true });
+  el.addEventListener('touchmove', (e) => { const t = e.touches[0]; mover(t.clientX, t.clientY); }, { passive: true });
+  el.addEventListener('touchend', terminar);
+}
+
+function previsualizarAvatar(inputId, wrapId, circleId, posObj){
   document.getElementById(inputId).addEventListener('change', (e) => {
     const file = e.target.files[0];
     const wrap = document.getElementById(wrapId);
     if(!file){ wrap.style.display = 'none'; return; }
     const url = URL.createObjectURL(file);
-    document.getElementById(circleId).style.backgroundImage = `url('${url}')`;
+    posObj.x = 50; posObj.y = 50;
+    const circle = document.getElementById(circleId);
+    circle.style.backgroundImage = `url('${url}')`;
+    circle.style.backgroundPosition = '50% 50%';
     wrap.style.display = 'flex';
   });
+  habilitarArrastre(circleId, posObj);
 }
-previsualizarAvatar('nj-avatar', 'nj-preview-wrap', 'nj-preview-circle');
-previsualizarAvatar('ej-avatar', 'ej-preview-wrap', 'ej-preview-circle');
+previsualizarAvatar('nj-avatar', 'nj-preview-wrap', 'nj-preview-circle', njAvatarPos);
+previsualizarAvatar('ej-avatar', 'ej-preview-wrap', 'ej-preview-circle', ejAvatarPos);
 
 // ---------- Crear jugador (perfil) desde la web (admin) ----------
 document.getElementById('btn-nuevo-jugador').addEventListener('click', () => {
@@ -965,6 +1004,8 @@ document.getElementById('btn-guardar-nuevo-jugador').addEventListener('click', a
   fd.append('password', ADMIN_STATE.password);
   fd.append('nombre', nombre);
   if(archivo) fd.append('avatar', archivo);
+  fd.append('avatar_pos_x', njAvatarPos.x);
+  fd.append('avatar_pos_y', njAvatarPos.y);
   const res = await fetch('/api/admin/crear_jugador', { method:'POST', body: fd });
   const data = await res.json();
   if(data.ok){
@@ -972,6 +1013,7 @@ document.getElementById('btn-guardar-nuevo-jugador').addEventListener('click', a
     document.getElementById('nj-nombre').value = '';
     document.getElementById('nj-avatar').value = '';
     document.getElementById('nj-preview-wrap').style.display = 'none';
+    njAvatarPos = { x: 50, y: 50 };
     await cargarJugadores();
   } else {
     alert('Error: ' + (data.error || 'no se pudo crear'));
@@ -992,8 +1034,17 @@ async function mostrarEditorJugador(nombre){
   document.getElementById('ej-logros').value = perfil.logros || '';
   document.getElementById('ej-avatar').value = '';
   document.getElementById('ej-banner').value = '';
-  document.getElementById('ej-preview-wrap').style.display = perfil.avatar_url ? 'flex' : 'none';
-  if(perfil.avatar_url) document.getElementById('ej-preview-circle').style.backgroundImage = `url('${perfil.avatar_url}')`;
+
+  ejAvatarPos.x = perfil.avatar_pos_x != null ? perfil.avatar_pos_x : 50;
+  ejAvatarPos.y = perfil.avatar_pos_y != null ? perfil.avatar_pos_y : 50;
+  const circle = document.getElementById('ej-preview-circle');
+  circle.style.backgroundPosition = `${ejAvatarPos.x}% ${ejAvatarPos.y}%`;
+  if(perfil.avatar_url){
+    circle.style.backgroundImage = `url('${perfil.avatar_url}')`;
+    document.getElementById('ej-preview-wrap').style.display = 'flex';
+  } else {
+    document.getElementById('ej-preview-wrap').style.display = 'none';
+  }
 
   document.getElementById('form-editar-jugador').style.display = 'block';
 }
@@ -1008,6 +1059,8 @@ document.getElementById('btn-guardar-editar-jugador').addEventListener('click', 
   fd.append('victorias', document.getElementById('ej-victorias').value || 0);
   fd.append('racha', document.getElementById('ej-racha').value || 0);
   fd.append('logros', document.getElementById('ej-logros').value);
+  fd.append('avatar_pos_x', ejAvatarPos.x);
+  fd.append('avatar_pos_y', ejAvatarPos.y);
   const avatar = document.getElementById('ej-avatar').files[0];
   const banner = document.getElementById('ej-banner').files[0];
   if(avatar) fd.append('avatar', avatar);
