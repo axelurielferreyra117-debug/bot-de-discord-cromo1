@@ -208,6 +208,39 @@
   }
   .pw-box .err{color:var(--rojo);font-size:13px;min-height:18px;}
 
+  .admin-form{
+    background:var(--surface);border:1px solid var(--rojo);border-radius:14px;
+    padding:16px;margin-top:10px;max-width:340px;
+  }
+  .admin-form label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
+
+  .jugadores-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;}
+  .jugador-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:16px 10px;text-align:center;cursor:pointer;transition:transform .15s ease, border-color .15s ease;
+  }
+  .jugador-card:hover{transform:translateY(-4px);border-color:var(--azul);}
+  .jugador-avatar{
+    width:72px;height:72px;border-radius:50%;margin:0 auto 10px;background:var(--surface-2) center/cover no-repeat;
+    border:2px solid var(--border);
+  }
+  .jugador-card h4{margin:0 0 4px;font-size:15px;font-weight:600;}
+  .jugador-card span{color:var(--muted);font-size:12px;}
+
+  .ruletas-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  @media (max-width:760px){.ruletas-row{grid-template-columns:1fr;}}
+  .ruleta-box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px;}
+  .ruleta-wheel-wrap{display:flex;justify-content:center;margin:12px 0 18px;}
+  .ruleta-svg{transition:transform 4s cubic-bezier(.17,.67,.16,.99);}
+  .ruleta-pointer{filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));}
+  .ruleta-opciones{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+  .ruleta-opcion-row{display:flex;gap:6px;align-items:center;}
+  .ruleta-opcion-row input[type=text]{flex:2;}
+  .ruleta-opcion-row input[type=number]{flex:1;}
+  .ruleta-opcion-row input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px;font-size:13px;}
+  .ruleta-opcion-row button{background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;}
+  .ruleta-resultado{text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;min-height:28px;color:var(--n3);}
+
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
 
   .mascota{
@@ -236,6 +269,8 @@
   <nav>
     <button data-tab="album" class="active">Álbum</button>
     <button data-tab="ranking">Top coleccionistas</button>
+    <button data-tab="jugadores">Jugadores</button>
+    <button data-tab="ruletas">Ruletas</button>
     <button data-tab="reglas">Reglas</button>
   </nav>
 </header>
@@ -247,6 +282,18 @@
       <div class="stat"><b id="stat-total">–</b><span>Cromos creados</span></div>
       <div class="stat"><b id="stat-especiales">–</b><span>Especiales o más</span></div>
     </div>
+    <div id="admin-crear-cromo" style="display:none;margin-bottom:18px;">
+      <button class="admin-btn" id="btn-nuevo-cromo">➕ Crear cromo</button>
+      <div id="form-nuevo-cromo" class="admin-form" style="display:none;">
+        <label>Nombre<input type="text" id="nc-nombre" class="admin-input"></label>
+        <label>Dueño (nombre)<input type="text" id="nc-dueno" class="admin-input"></label>
+        <label>Imagen<input type="file" id="nc-imagen" class="admin-input" accept="image/*"></label>
+        <div style="display:flex;gap:8px;">
+          <button class="admin-btn admin-btn-save" id="btn-guardar-nuevo-cromo">Crear</button>
+          <button class="admin-btn" id="btn-cancelar-nuevo-cromo">Cancelar</button>
+        </div>
+      </div>
+    </div>
     <div id="grid" class="grid"></div>
     <div id="grid-empty" class="empty" style="display:none;">Todavía no hay cromos creados.</div>
   </section>
@@ -255,6 +302,38 @@
     <h2 style="font-size:20px;margin-bottom:16px;">Quién tiene más cromos</h2>
     <div id="rank-list" class="rank-list"></div>
     <div id="rank-empty" class="empty" style="display:none;">Todavía nadie tiene cromos.</div>
+  </section>
+
+  <section id="jugadores">
+    <h2 style="font-size:20px;margin-bottom:16px;">Perfiles de jugadores</h2>
+    <div id="admin-crear-jugador" style="display:none;margin-bottom:18px;">
+      <button class="admin-btn" id="btn-nuevo-jugador">➕ Crear perfil</button>
+      <div id="form-nuevo-jugador" class="admin-form" style="display:none;">
+        <label>Nombre<input type="text" id="nj-nombre" class="admin-input"></label>
+        <label>Avatar (opcional)<input type="file" id="nj-avatar" class="admin-input" accept="image/*"></label>
+        <div style="display:flex;gap:8px;">
+          <button class="admin-btn admin-btn-save" id="btn-guardar-nuevo-jugador">Crear</button>
+          <button class="admin-btn" id="btn-cancelar-nuevo-jugador">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <div id="jugadores-grid" class="jugadores-grid"></div>
+    <div id="jugadores-empty" class="empty" style="display:none;">Todavía no hay perfiles.</div>
+
+    <div id="jugador-detalle" style="display:none;">
+      <button class="admin-btn" id="btn-volver-jugadores" style="margin-bottom:16px;">← Volver a perfiles</button>
+      <h3 id="jugador-detalle-nombre" style="font-size:22px;margin-bottom:12px;"></h3>
+      <div id="jugador-detalle-grid" class="grid"></div>
+    </div>
+  </section>
+
+  <section id="ruletas">
+    <h2 style="font-size:20px;margin-bottom:6px;">Ruletas</h2>
+    <p style="color:var(--muted);font-size:14px;margin:0 0 20px;">Armá tus opciones y girá. Cualquiera puede editar estas ruletas libremente.</p>
+    <div class="ruletas-row">
+      <div class="ruleta-box" id="ruleta-1"></div>
+      <div class="ruleta-box" id="ruleta-2"></div>
+    </div>
   </section>
 
   <section id="reglas">
@@ -292,6 +371,16 @@
       </div>
     </div>
   </div>
+  <div id="admin-backup-panel" style="display:none;margin-top:12px;">
+    <button class="admin-btn admin-btn-save" id="btn-exportar">⬇️ Exportar respaldo</button>
+    <button class="admin-btn" id="btn-mostrar-importar">⬆️ Importar respaldo</button>
+    <div id="importar-editor" style="display:none;margin-top:10px;">
+      <input type="file" id="input-importar" accept="application/json" class="admin-input" style="max-width:280px;margin-inline:auto;">
+      <div style="margin-top:8px;">
+        <button class="admin-btn admin-btn-save" id="btn-confirmar-importar">Restaurar</button>
+      </div>
+    </div>
+  </div>
 </footer>
 
 
@@ -300,6 +389,10 @@
     <button class="close" id="modal-close">&times;</button>
     <h2 id="modal-title">—</h2>
     <div class="owner" id="modal-owner">—</div>
+    <div id="modal-admin-dueno" style="display:none;margin-bottom:14px;">
+      <input type="text" id="modal-input-dueno" class="admin-input" placeholder="Nombre del dueño" style="max-width:220px;display:inline-block;">
+      <button class="admin-btn admin-btn-save" id="modal-btn-guardar-dueno">Guardar dueño</button>
+    </div>
     <div class="levels" id="modal-levels"></div>
   </div>
 </div>
@@ -325,24 +418,8 @@ const ADMIN_STATE = { activo: false, password: "" };
 const TIER_LABEL = {1:"Normal", 2:"Especial", 3:"Muy Especial"};
 let cromosCache = [];
 
-async function cargarAlbum(){
-  const res = await fetch('/api/cromos');
-  const data = await res.json();
-  cromosCache = data;
-
-  document.getElementById('stat-total').textContent = data.length;
-  document.getElementById('stat-especiales').textContent = data.filter(c => c.nivel_actual >= 2).length;
-
-  const grid = document.getElementById('grid');
-  const empty = document.getElementById('grid-empty');
-  grid.innerHTML = '';
-
-  if(data.length === 0){
-    empty.style.display = 'block';
-    return;
-  }
-  empty.style.display = 'none';
-
+function renderTarjetas(data, contenedor){
+  contenedor.innerHTML = '';
   data.forEach(c => {
     const imgActual = c.imagenes[String(c.nivel_actual)] || '';
     const div = document.createElement('div');
@@ -357,13 +434,44 @@ async function cargarAlbum(){
       </div>
     `;
     div.addEventListener('click', () => abrirModal(c));
-    grid.appendChild(div);
+    contenedor.appendChild(div);
   });
 }
 
+async function cargarAlbum(){
+  const res = await fetch('/api/cromos');
+  const data = await res.json();
+  cromosCache = data;
+
+  document.getElementById('stat-total').textContent = data.length;
+  document.getElementById('stat-especiales').textContent = data.filter(c => c.nivel_actual >= 2).length;
+
+  const grid = document.getElementById('grid');
+  const empty = document.getElementById('grid-empty');
+
+  if(data.length === 0){
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  renderTarjetas(data, grid);
+}
+
+let cromoAbiertoId = null;
+
 function abrirModal(c){
+  cromoAbiertoId = c.id;
   document.getElementById('modal-title').textContent = c.nombre;
   document.getElementById('modal-owner').textContent = c.owner_username ? `Dueño: ${c.owner_username}` : 'Sin dueño';
+
+  const dueñoAdmin = document.getElementById('modal-admin-dueno');
+  if(ADMIN_STATE.activo){
+    dueñoAdmin.style.display = 'block';
+    document.getElementById('modal-input-dueno').value = c.owner_username || '';
+  } else {
+    dueñoAdmin.style.display = 'none';
+  }
 
   const levels = document.getElementById('modal-levels');
   levels.innerHTML = '';
@@ -532,6 +640,9 @@ async function intentarLogin(){
     document.getElementById('pw-box').classList.remove('open');
     document.getElementById('reglas-admin').style.display = 'block';
     document.getElementById('admin-links-panel').style.display = 'block';
+    document.getElementById('admin-crear-cromo').style.display = 'block';
+    document.getElementById('admin-crear-jugador').style.display = 'block';
+    document.getElementById('admin-backup-panel').style.display = 'block';
     document.getElementById('input-youtube').value = configCache.links.youtube || '';
     document.getElementById('input-discord').value = configCache.links.discord || '';
     document.getElementById('input-twitter').value = configCache.links.twitter || '';
@@ -595,6 +706,273 @@ document.getElementById('btn-guardar-links').addEventListener('click', async () 
     alert('Error: ' + (data.error || 'no se pudo guardar'));
   }
 });
+
+// ---------- Guardar dueño desde el modal ----------
+document.getElementById('modal-btn-guardar-dueno').addEventListener('click', async () => {
+  const dueno = document.getElementById('modal-input-dueno').value;
+  const res = await fetch('/api/admin/cambiar_dueno', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password: ADMIN_STATE.password, cromo_id: cromoAbiertoId, dueno})
+  });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('overlay').classList.remove('open');
+    await cargarAlbum();
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
+
+// ---------- Crear cromo desde la web (admin) ----------
+document.getElementById('btn-nuevo-cromo').addEventListener('click', () => {
+  const f = document.getElementById('form-nuevo-cromo');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('btn-cancelar-nuevo-cromo').addEventListener('click', () => {
+  document.getElementById('form-nuevo-cromo').style.display = 'none';
+});
+document.getElementById('btn-guardar-nuevo-cromo').addEventListener('click', async () => {
+  const nombre = document.getElementById('nc-nombre').value.trim();
+  const dueno = document.getElementById('nc-dueno').value.trim();
+  const archivo = document.getElementById('nc-imagen').files[0];
+  if(!nombre || !archivo){ alert('Falta el nombre o la imagen'); return; }
+
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('nombre', nombre);
+  fd.append('dueno', dueno);
+  fd.append('imagen', archivo);
+  const res = await fetch('/api/admin/crear_cromo', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('form-nuevo-cromo').style.display = 'none';
+    document.getElementById('nc-nombre').value = '';
+    document.getElementById('nc-dueno').value = '';
+    document.getElementById('nc-imagen').value = '';
+    await cargarAlbum();
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo crear'));
+  }
+});
+
+// ---------- Jugadores ----------
+async function cargarJugadores(){
+  const res = await fetch('/api/jugadores');
+  const data = await res.json();
+  const grid = document.getElementById('jugadores-grid');
+  const empty = document.getElementById('jugadores-empty');
+  grid.innerHTML = '';
+
+  if(data.length === 0){
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  data.forEach(j => {
+    const card = document.createElement('div');
+    card.className = 'jugador-card';
+    card.innerHTML = `
+      <div class="jugador-avatar" style="${j.avatar_url ? `background-image:url('${j.avatar_url}')` : ''}"></div>
+      <h4>${escapeHtml(j.nombre)}</h4>
+      <span>${j.cantidad} cromo(s)</span>
+    `;
+    card.addEventListener('click', () => verPerfilJugador(j.nombre));
+    grid.appendChild(card);
+  });
+}
+cargarJugadores();
+
+async function verPerfilJugador(nombre){
+  const res = await fetch(`/api/jugadores/${encodeURIComponent(nombre)}/cromos`);
+  const data = await res.json();
+
+  document.getElementById('jugadores-grid').style.display = 'none';
+  document.getElementById('jugador-detalle').style.display = 'block';
+  document.getElementById('jugador-detalle-nombre').textContent = nombre;
+
+  const grid = document.getElementById('jugador-detalle-grid');
+  if(data.length === 0){
+    grid.innerHTML = '<p style="color:var(--muted);">Todavía no tiene cromos.</p>';
+  } else {
+    renderTarjetas(data, grid);
+  }
+}
+document.getElementById('btn-volver-jugadores').addEventListener('click', () => {
+  document.getElementById('jugador-detalle').style.display = 'none';
+  document.getElementById('jugadores-grid').style.display = 'grid';
+});
+
+// ---------- Crear jugador (perfil) desde la web (admin) ----------
+document.getElementById('btn-nuevo-jugador').addEventListener('click', () => {
+  const f = document.getElementById('form-nuevo-jugador');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('btn-cancelar-nuevo-jugador').addEventListener('click', () => {
+  document.getElementById('form-nuevo-jugador').style.display = 'none';
+});
+document.getElementById('btn-guardar-nuevo-jugador').addEventListener('click', async () => {
+  const nombre = document.getElementById('nj-nombre').value.trim();
+  const archivo = document.getElementById('nj-avatar').files[0];
+  if(!nombre){ alert('Falta el nombre'); return; }
+
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('nombre', nombre);
+  if(archivo) fd.append('avatar', archivo);
+  const res = await fetch('/api/admin/crear_jugador', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('form-nuevo-jugador').style.display = 'none';
+    document.getElementById('nj-nombre').value = '';
+    document.getElementById('nj-avatar').value = '';
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo crear'));
+  }
+});
+
+// ---------- Exportar / Importar respaldo ----------
+document.getElementById('btn-exportar').addEventListener('click', () => {
+  const url = `/api/admin/exportar?password=${encodeURIComponent(ADMIN_STATE.password)}`;
+  window.location.href = url;
+});
+document.getElementById('btn-mostrar-importar').addEventListener('click', () => {
+  const el = document.getElementById('importar-editor');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('btn-confirmar-importar').addEventListener('click', async () => {
+  const archivo = document.getElementById('input-importar').files[0];
+  if(!archivo){ alert('Elegí el archivo de respaldo primero'); return; }
+  const fd = new FormData();
+  fd.append('password', ADMIN_STATE.password);
+  fd.append('archivo', archivo);
+  const res = await fetch('/api/admin/importar', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.ok){
+    alert(`✅ Se restauraron ${data.cantidad} cromo(s).`);
+    document.getElementById('importar-editor').style.display = 'none';
+    document.getElementById('input-importar').value = '';
+    await cargarAlbum();
+    await cargarRanking();
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo importar'));
+  }
+});
+
+// ---------- Ruletas ----------
+function crearRuleta(contenedorId){
+  let opciones = [
+    { nombre: 'Opción 1', cantidad: 1 },
+    { nombre: 'Opción 2', cantidad: 1 },
+  ];
+  const cont = document.getElementById(contenedorId);
+  let girando = false;
+
+  function colores(n){
+    const arr = [];
+    for(let i=0;i<n;i++) arr.push(`hsl(${Math.round(i*360/n)},65%,50%)`);
+    return arr;
+  }
+
+  function gradiente(){
+    const total = opciones.reduce((s,o)=>s+Number(o.cantidad||0),0) || 1;
+    const cols = colores(opciones.length);
+    let acumulado = 0, partes = [];
+    opciones.forEach((o,i) => {
+      const frac = Number(o.cantidad||0)/total;
+      partes.push(`${cols[i]} ${acumulado*360}deg ${(acumulado+frac)*360}deg`);
+      acumulado += frac;
+    });
+    return partes.length ? `conic-gradient(${partes.join(',')})` : '#333';
+  }
+
+  function render(){
+    cont.innerHTML = `
+      <div class="ruleta-wheel-wrap">
+        <div style="position:relative;width:220px;height:220px;">
+          <div class="ruleta-svg" id="${contenedorId}-wheel" style="width:220px;height:220px;border-radius:50%;background:${gradiente()};border:4px solid var(--border);"></div>
+          <div class="ruleta-pointer" style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:18px solid var(--rojo);"></div>
+        </div>
+      </div>
+      <div class="ruleta-opciones" id="${contenedorId}-opciones"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="admin-btn" id="${contenedorId}-add">➕ Opción</button>
+        <button class="admin-btn admin-btn-save" id="${contenedorId}-girar">🎡 Girar</button>
+      </div>
+      <div class="ruleta-resultado" id="${contenedorId}-resultado"></div>
+    `;
+
+    const opDiv = document.getElementById(`${contenedorId}-opciones`);
+    opciones.forEach((o, i) => {
+      const row = document.createElement('div');
+      row.className = 'ruleta-opcion-row';
+      row.innerHTML = `
+        <input type="text" value="${escapeHtml(o.nombre)}" data-idx="${i}" data-field="nombre">
+        <input type="number" min="1" value="${o.cantidad}" data-idx="${i}" data-field="cantidad">
+        <button data-idx="${i}">✕</button>
+      `;
+      opDiv.appendChild(row);
+    });
+
+    opDiv.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const idx = +inp.dataset.idx, field = inp.dataset.field;
+        opciones[idx][field] = field === 'cantidad' ? (Number(inp.value)||1) : inp.value;
+        const wheel = document.getElementById(`${contenedorId}-wheel`);
+        if(wheel) wheel.style.background = gradiente();
+      });
+    });
+    opDiv.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if(opciones.length <= 2){ alert('Necesitás al menos 2 opciones'); return; }
+        opciones.splice(+btn.dataset.idx, 1);
+        render();
+      });
+    });
+    document.getElementById(`${contenedorId}-add`).addEventListener('click', () => {
+      opciones.push({ nombre: `Opción ${opciones.length+1}`, cantidad: 1 });
+      render();
+    });
+    document.getElementById(`${contenedorId}-girar`).addEventListener('click', girar);
+  }
+
+  function girar(){
+    if(girando) return;
+    const total = opciones.reduce((s,o)=>s+Number(o.cantidad||0),0);
+    if(total <= 0){ alert('Cargá alguna cantidad mayor a 0'); return; }
+    girando = true;
+
+    let r = Math.random()*total, acumulado = 0, elegido = opciones[0], start = 0, end = 0;
+    for(const o of opciones){
+      const desde = acumulado;
+      acumulado += Number(o.cantidad||0);
+      if(r <= acumulado){ elegido = o; start = (desde/total)*360; end = (acumulado/total)*360; break; }
+    }
+    const mid = (start+end)/2;
+    const anguloFinal = 5*360 + (360 - mid);
+
+    const wheel = document.getElementById(`${contenedorId}-wheel`);
+    document.getElementById(`${contenedorId}-resultado`).textContent = '';
+    wheel.style.transform = `rotate(${anguloFinal}deg)`;
+
+    setTimeout(() => {
+      document.getElementById(`${contenedorId}-resultado`).textContent = `🎉 ${elegido.nombre}`;
+      girando = false;
+      wheel.style.transition = 'none';
+      wheel.style.transform = `rotate(${anguloFinal % 360}deg)`;
+      requestAnimationFrame(() => { wheel.style.transition = ''; });
+    }, 4200);
+  }
+
+  render();
+}
+crearRuleta('ruleta-1');
+crearRuleta('ruleta-2');
 </script>
 
 </body>
