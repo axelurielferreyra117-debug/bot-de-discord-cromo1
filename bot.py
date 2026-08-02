@@ -66,6 +66,8 @@ def get_db():
         ("victorias", "INTEGER NOT NULL DEFAULT 0"),
         ("racha", "INTEGER NOT NULL DEFAULT 0"),
         ("logros", "TEXT"),
+        ("avatar_pos_x", "REAL NOT NULL DEFAULT 50"),
+        ("avatar_pos_y", "REAL NOT NULL DEFAULT 50"),
     ]:
         try:
             conn.execute(f"ALTER TABLE jugadores ADD COLUMN {columna} {tipo}")
@@ -74,15 +76,23 @@ def get_db():
     return conn
 
 
-def upsert_jugador(nombre: str, avatar_url: str = None):
+def upsert_jugador(nombre: str, avatar_url: str = None, avatar_pos_x: float = None, avatar_pos_y: float = None):
     if not nombre:
         return
     conn = get_db()
     existente = conn.execute("SELECT avatar_url FROM jugadores WHERE nombre = ?", (nombre,)).fetchone()
     if existente is None:
-        conn.execute("INSERT INTO jugadores (nombre, avatar_url) VALUES (?, ?)", (nombre, avatar_url))
-    elif avatar_url is not None:
-        conn.execute("UPDATE jugadores SET avatar_url = ? WHERE nombre = ?", (avatar_url, nombre))
+        conn.execute(
+            "INSERT INTO jugadores (nombre, avatar_url, avatar_pos_x, avatar_pos_y) VALUES (?, ?, ?, ?)",
+            (nombre, avatar_url, avatar_pos_x if avatar_pos_x is not None else 50, avatar_pos_y if avatar_pos_y is not None else 50),
+        )
+    else:
+        if avatar_url is not None:
+            conn.execute("UPDATE jugadores SET avatar_url = ? WHERE nombre = ?", (avatar_url, nombre))
+        if avatar_pos_x is not None:
+            conn.execute("UPDATE jugadores SET avatar_pos_x = ? WHERE nombre = ?", (avatar_pos_x, nombre))
+        if avatar_pos_y is not None:
+            conn.execute("UPDATE jugadores SET avatar_pos_y = ? WHERE nombre = ?", (avatar_pos_y, nombre))
     conn.commit()
     conn.close()
 
@@ -90,7 +100,7 @@ def upsert_jugador(nombre: str, avatar_url: str = None):
 def obtener_jugador(nombre: str):
     conn = get_db()
     row = conn.execute(
-        "SELECT nombre, avatar_url, banner_url, victorias, racha, logros FROM jugadores WHERE nombre = ?",
+        "SELECT nombre, avatar_url, banner_url, victorias, racha, logros, avatar_pos_x, avatar_pos_y FROM jugadores WHERE nombre = ?",
         (nombre,),
     ).fetchone()
     conn.close()
@@ -98,7 +108,8 @@ def obtener_jugador(nombre: str):
 
 
 def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str = None,
-                    banner_url: str = None, victorias: int = None, racha: int = None, logros: str = None):
+                    banner_url: str = None, victorias: int = None, racha: int = None, logros: str = None,
+                    avatar_pos_x: float = None, avatar_pos_y: float = None):
     conn = get_db()
     actual = conn.execute("SELECT * FROM jugadores WHERE nombre = ?", (nombre_actual,)).fetchone()
     if actual is None:
@@ -126,6 +137,10 @@ def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str
         campos.append("racha = ?"); valores.append(racha)
     if logros is not None:
         campos.append("logros = ?"); valores.append(logros)
+    if avatar_pos_x is not None:
+        campos.append("avatar_pos_x = ?"); valores.append(avatar_pos_x)
+    if avatar_pos_y is not None:
+        campos.append("avatar_pos_y = ?"); valores.append(avatar_pos_y)
 
     if campos:
         valores.append(nombre_final)
@@ -140,7 +155,7 @@ def listar_jugadores():
     conn = get_db()
     rows = conn.execute(
         """
-        SELECT j.nombre, j.avatar_url, COUNT(c.id) as cantidad
+        SELECT j.nombre, j.avatar_url, j.avatar_pos_x, j.avatar_pos_y, COUNT(c.id) as cantidad
         FROM jugadores j
         LEFT JOIN cromos c ON c.owner_username = j.nombre
         GROUP BY j.nombre
@@ -852,7 +867,10 @@ def api_admin_subir_nivel():
 @web_app.route("/api/jugadores")
 def api_jugadores():
     filas = listar_jugadores()
-    return jsonify([{"nombre": n, "avatar_url": a, "cantidad": c} for n, a, c in filas])
+    return jsonify([
+        {"nombre": n, "avatar_url": a, "avatar_pos_x": px, "avatar_pos_y": py, "cantidad": c}
+        for n, a, px, py, c in filas
+    ])
 
 
 @web_app.route("/api/jugadores/<nombre>/cromos")
@@ -878,10 +896,11 @@ def api_jugador_perfil(nombre):
     row = obtener_jugador(nombre)
     if row is None:
         return jsonify({"ok": False, "error": "No existe"}), 404
-    n, avatar, banner, victorias, racha, logros = row
+    n, avatar, banner, victorias, racha, logros, pos_x, pos_y = row
     return jsonify({
         "nombre": n, "avatar_url": avatar, "banner_url": banner,
         "victorias": victorias, "racha": racha, "logros": logros or "",
+        "avatar_pos_x": pos_x, "avatar_pos_y": pos_y,
     })
 
 
@@ -902,7 +921,9 @@ def api_admin_crear_jugador():
         archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
         avatar_url = f"/uploads/{nombre_archivo}"
 
-    upsert_jugador(nombre, avatar_url)
+    pos_x = request.form.get("avatar_pos_x", type=float)
+    pos_y = request.form.get("avatar_pos_y", type=float)
+    upsert_jugador(nombre, avatar_url, pos_x, pos_y)
     return jsonify({"ok": True})
 
 
@@ -934,10 +955,12 @@ def api_admin_editar_jugador():
     victorias = request.form.get("victorias", type=int)
     racha = request.form.get("racha", type=int)
     logros = request.form.get("logros")
+    pos_x = request.form.get("avatar_pos_x", type=float)
+    pos_y = request.form.get("avatar_pos_y", type=float)
 
     ok = editar_jugador(
         nombre_actual, nuevo_nombre=nuevo_nombre, avatar_url=avatar_url, banner_url=banner_url,
-        victorias=victorias, racha=racha, logros=logros,
+        victorias=victorias, racha=racha, logros=logros, avatar_pos_x=pos_x, avatar_pos_y=pos_y,
     )
     if not ok:
         return jsonify({"ok": False, "error": "No se pudo editar (¿nombre repetido?)"}), 400
