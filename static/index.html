@@ -227,19 +227,19 @@
   .jugador-card h4{margin:0 0 4px;font-size:15px;font-weight:600;}
   .jugador-card span{color:var(--muted);font-size:12px;}
 
-  .ruletas-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
-  @media (max-width:760px){.ruletas-row{grid-template-columns:1fr;}}
-  .ruleta-box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px;}
-  .ruleta-wheel-wrap{display:flex;justify-content:center;margin:12px 0 18px;}
-  .ruleta-svg{transition:transform 4s cubic-bezier(.17,.67,.16,.99);}
-  .ruleta-pointer{filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));}
-  .ruleta-opciones{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
-  .ruleta-opcion-row{display:flex;gap:6px;align-items:center;}
-  .ruleta-opcion-row input[type=text]{flex:2;}
-  .ruleta-opcion-row input[type=number]{flex:1;}
-  .ruleta-opcion-row input{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 8px;font-size:13px;}
-  .ruleta-opcion-row button{background:none;border:none;color:var(--rojo);cursor:pointer;font-size:16px;}
-  .ruleta-resultado{text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;min-height:28px;color:var(--n3);}
+  .ln-intro{color:var(--muted);font-size:14px;margin:0 0 20px;max-width:560px;}
+  .ln-lista{display:flex;flex-direction:column;gap:10px;max-width:640px;}
+  .ln-row{
+    display:flex;align-items:center;gap:14px;background:var(--surface);
+    border:1px solid var(--border);border-left:4px solid var(--rojo);border-radius:14px;padding:12px 16px;
+  }
+  .ln-avatar{width:46px;height:46px;border-radius:50%;background:var(--surface-2) center/cover no-repeat;border:2px solid var(--border);flex-shrink:0;}
+  .ln-info{flex:1;min-width:0;}
+  .ln-info b{display:block;font-weight:600;}
+  .ln-info span{color:var(--muted);font-size:12px;}
+  .ln-deuda{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;color:var(--rojo);min-width:48px;text-align:right;}
+  .ln-acciones{display:flex;gap:6px;}
+  .ln-acciones button{padding:6px 10px;}
 
   .avatar-preview-wrap{display:flex;align-items:center;gap:10px;margin-top:6px;}
   .avatar-preview-circle{
@@ -298,7 +298,7 @@
     <button data-tab="album" class="active">Álbum</button>
     <button data-tab="ranking">Top coleccionistas</button>
     <button data-tab="jugadores">Jugadores</button>
-    <button data-tab="ruletas">Ruletas</button>
+    <button data-tab="listanegra">Lista negra</button>
     <button data-tab="reglas">Reglas</button>
   </nav>
 </header>
@@ -375,6 +375,8 @@
           <label>Nuevo banner (opcional)<input type="file" id="ej-banner" class="admin-input" accept="image/*"></label>
           <label>Victorias<input type="number" id="ej-victorias" class="admin-input"></label>
           <label>Racha actual<input type="number" id="ej-racha" class="admin-input"></label>
+          <label>Cromos en el top (a mano — vacío = se cuenta solo)<input type="number" id="ej-manual" class="admin-input"></label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;"><input type="checkbox" id="ej-infinito"> Cromos infinitos (∞)</label>
           <label>Logros / notas<textarea id="ej-logros" class="admin-textarea" style="min-height:80px;"></textarea></label>
           <div style="display:flex;gap:8px;">
             <button class="admin-btn admin-btn-save" id="btn-guardar-editar-jugador">Guardar</button>
@@ -392,13 +394,24 @@
     </div>
   </section>
 
-  <section id="ruletas">
-    <h2 style="font-size:20px;margin-bottom:6px;">Ruletas</h2>
-    <p style="color:var(--muted);font-size:14px;margin:0 0 20px;">Armá tus opciones y girá. Cualquiera puede editar estas ruletas libremente.</p>
-    <div class="ruletas-row">
-      <div class="ruleta-box" id="ruleta-1"></div>
-      <div class="ruleta-box" id="ruleta-2"></div>
+  <section id="listanegra">
+    <h2 style="font-size:20px;margin-bottom:6px;">Lista negra</h2>
+    <p class="ln-intro">Jugadores que deben cromos. Cada cromo que ganen se les descuenta de la deuda y pasa al jugador que cobra.</p>
+    <div id="admin-lista-negra" style="display:none;margin-bottom:18px;">
+      <button class="admin-btn" id="btn-nueva-deuda">➕ Agregar a la lista</button>
+      <div id="form-deuda" class="admin-form" style="display:none;">
+        <label>Jugador que debe<input type="text" id="deuda-jugador" class="admin-input" list="lista-jugadores" autocomplete="off"></label>
+        <label>Cromos que debe<input type="number" min="1" id="deuda-cantidad" class="admin-input"></label>
+        <label>Quién recibe los cromos<input type="text" id="deuda-destinatario" class="admin-input" list="lista-jugadores" autocomplete="off"></label>
+        <datalist id="lista-jugadores"></datalist>
+        <div style="display:flex;gap:8px;">
+          <button class="admin-btn admin-btn-save" id="btn-guardar-deuda">Guardar</button>
+          <button class="admin-btn" id="btn-cancelar-deuda">Cancelar</button>
+        </div>
+      </div>
     </div>
+    <div id="ln-lista" class="ln-lista"></div>
+    <div id="ln-empty" class="empty" style="display:none;">La lista negra está vacía.</div>
   </section>
 
   <section id="reglas">
@@ -457,6 +470,7 @@
     <div id="modal-admin-dueno" style="display:none;margin-bottom:14px;">
       <input type="text" id="modal-input-dueno" class="admin-input" placeholder="Nombre del dueño" style="max-width:220px;display:inline-block;">
       <button class="admin-btn admin-btn-save" id="modal-btn-guardar-dueno">Guardar dueño</button>
+      <button class="admin-btn" id="modal-btn-borrar-cromo" style="border-color:var(--rojo);color:var(--rojo);">🗑️ Borrar cromo</button>
     </div>
     <div class="levels" id="modal-levels"></div>
   </div>
@@ -662,7 +676,7 @@ async function cargarRanking(){
     row.innerHTML = `
       <div class="pos">${i+1}</div>
       <div class="name">${escapeHtml(r.owner_username || 'Desconocido')}</div>
-      <div class="count">${r.cantidad}</div>
+      <div class="count">${r.infinito ? '∞' : r.cantidad}</div>
     `;
     list.appendChild(row);
   });
@@ -738,10 +752,12 @@ async function intentarLogin(){
     document.getElementById('admin-crear-cromo').style.display = 'block';
     document.getElementById('admin-crear-jugador').style.display = 'block';
     document.getElementById('admin-backup-panel').style.display = 'block';
+    document.getElementById('admin-lista-negra').style.display = 'block';
     document.getElementById('input-youtube').value = configCache.links.youtube || '';
     document.getElementById('input-discord').value = configCache.links.discord || '';
     document.getElementById('input-twitter').value = configCache.links.twitter || '';
     await cargarJugadores();
+    await cargarListaNegra();
   } else {
     document.getElementById('pw-error').textContent = 'Contraseña incorrecta';
   }
@@ -814,12 +830,39 @@ document.getElementById('modal-btn-guardar-dueno').addEventListener('click', asy
   const data = await res.json();
   if(data.ok){
     document.getElementById('overlay').classList.remove('open');
+    avisarDeuda(data, dueno);
     await cargarAlbum();
     await cargarJugadores();
+    await cargarRanking();
+    await cargarListaNegra();
   } else {
     alert('Error: ' + (data.error || 'no se pudo guardar'));
   }
 });
+
+document.getElementById('modal-btn-borrar-cromo').addEventListener('click', async () => {
+  if(!confirm('¿Seguro que querés borrar este cromo para siempre? No se puede deshacer.')) return;
+  const res = await fetch('/api/admin/borrar_cromo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({password: ADMIN_STATE.password, cromo_id: cromoAbiertoId})
+  });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('overlay').classList.remove('open');
+    await cargarAlbum();
+    await cargarRanking();
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo borrar'));
+  }
+});
+
+function avisarDeuda(data, jugador){
+  if(!data.redirigido_a) return;
+  const resto = data.deuda_restante > 0 ? `Le quedan ${data.deuda_restante} por pagar.` : 'Con este cromo saldó la deuda.';
+  alert(`⚠️ ${jugador} estaba en la lista negra: el cromo pasó a ${data.redirigido_a}. ${resto}`);
+}
 
 // ---------- Crear cromo desde la web (admin) ----------
 document.getElementById('btn-nuevo-cromo').addEventListener('click', () => {
@@ -847,8 +890,11 @@ document.getElementById('btn-guardar-nuevo-cromo').addEventListener('click', asy
     document.getElementById('nc-nombre').value = '';
     document.getElementById('nc-dueno').value = '';
     document.getElementById('nc-imagen').value = '';
+    avisarDeuda(data, dueno);
     await cargarAlbum();
     await cargarJugadores();
+    await cargarRanking();
+    await cargarListaNegra();
   } else {
     alert('Error: ' + (data.error || 'no se pudo crear'));
   }
@@ -861,6 +907,7 @@ async function cargarJugadores(){
   const grid = document.getElementById('jugadores-grid');
   const empty = document.getElementById('jugadores-empty');
   grid.innerHTML = '';
+  document.getElementById('lista-jugadores').innerHTML = data.map(j => `<option value="${escapeHtml(j.nombre)}"></option>`).join('');
 
   if(data.length === 0){
     empty.style.display = 'block';
@@ -875,7 +922,7 @@ async function cargarJugadores(){
       ${ADMIN_STATE.activo ? '<button class="editar-mini" title="Editar">✏️</button>' : ''}
       <div class="jugador-avatar" style="${j.avatar_url ? `background-image:url('${j.avatar_url}');background-position:${j.avatar_pos_x}% ${j.avatar_pos_y}%` : ''}"></div>
       <h4>${escapeHtml(j.nombre)}</h4>
-      <span>${j.cantidad} cromo(s)</span>
+      <span>${j.infinito ? '∞' : j.cantidad} cromo(s)</span>
     `;
     card.addEventListener('click', () => verPerfilJugador(j.nombre));
     if(ADMIN_STATE.activo){
@@ -1032,6 +1079,8 @@ async function mostrarEditorJugador(nombre){
   document.getElementById('ej-victorias').value = perfil.victorias || 0;
   document.getElementById('ej-racha').value = perfil.racha || 0;
   document.getElementById('ej-logros').value = perfil.logros || '';
+  document.getElementById('ej-manual').value = perfil.cromos_manual ?? '';
+  document.getElementById('ej-infinito').checked = !!perfil.cromos_infinito;
   document.getElementById('ej-avatar').value = '';
   document.getElementById('ej-banner').value = '';
 
@@ -1059,6 +1108,8 @@ document.getElementById('btn-guardar-editar-jugador').addEventListener('click', 
   fd.append('victorias', document.getElementById('ej-victorias').value || 0);
   fd.append('racha', document.getElementById('ej-racha').value || 0);
   fd.append('logros', document.getElementById('ej-logros').value);
+  fd.append('cromos_manual', document.getElementById('ej-manual').value);
+  fd.append('cromos_infinito', document.getElementById('ej-infinito').checked ? 1 : 0);
   fd.append('avatar_pos_x', ejAvatarPos.x);
   fd.append('avatar_pos_y', ejAvatarPos.y);
   const avatar = document.getElementById('ej-avatar').files[0];
@@ -1071,6 +1122,8 @@ document.getElementById('btn-guardar-editar-jugador').addEventListener('click', 
   if(data.ok){
     document.getElementById('form-editar-jugador').style.display = 'none';
     await cargarJugadores();
+    await cargarRanking();
+    await cargarListaNegra();
     await verPerfilJugador(data.nombre);
   } else {
     alert('Error: ' + (data.error || 'no se pudo editar'));
@@ -1095,126 +1148,89 @@ document.getElementById('btn-confirmar-importar').addEventListener('click', asyn
   const res = await fetch('/api/admin/importar', { method:'POST', body: fd });
   const data = await res.json();
   if(data.ok){
-    alert(`✅ Se restauraron ${data.cantidad} cromo(s).`);
+    alert(`✅ Restaurado: ${data.cromos} cromo(s), ${data.jugadores} perfil(es), ${data.deudas} deuda(s) y ${data.archivos} imagen(es).`);
     document.getElementById('importar-editor').style.display = 'none';
     document.getElementById('input-importar').value = '';
     await cargarAlbum();
     await cargarRanking();
     await cargarJugadores();
+    await cargarListaNegra();
+    await cargarConfig();
   } else {
     alert('Error: ' + (data.error || 'no se pudo importar'));
   }
 });
+// ---------- Lista negra ----------
+async function cargarListaNegra(){
+  const res = await fetch('/api/lista_negra');
+  const data = await res.json();
+  const cont = document.getElementById('ln-lista');
+  const empty = document.getElementById('ln-empty');
+  cont.innerHTML = '';
+  empty.style.display = data.length === 0 ? 'block' : 'none';
 
-// ---------- Ruletas ----------
-function crearRuleta(contenedorId){
-  let opciones = [
-    { nombre: 'Opción 1', cantidad: 1 },
-    { nombre: 'Opción 2', cantidad: 1 },
-  ];
-  const cont = document.getElementById(contenedorId);
-  let girando = false;
-
-  function colores(n){
-    const arr = [];
-    for(let i=0;i<n;i++) arr.push(`hsl(${Math.round(i*360/n)},65%,50%)`);
-    return arr;
-  }
-
-  function gradiente(){
-    const total = opciones.reduce((s,o)=>s+Number(o.cantidad||0),0) || 1;
-    const cols = colores(opciones.length);
-    let acumulado = 0, partes = [];
-    opciones.forEach((o,i) => {
-      const frac = Number(o.cantidad||0)/total;
-      partes.push(`${cols[i]} ${acumulado*360}deg ${(acumulado+frac)*360}deg`);
-      acumulado += frac;
-    });
-    return partes.length ? `conic-gradient(${partes.join(',')})` : '#333';
-  }
-
-  function render(){
-    cont.innerHTML = `
-      <div class="ruleta-wheel-wrap">
-        <div style="position:relative;width:220px;height:220px;">
-          <div class="ruleta-svg" id="${contenedorId}-wheel" style="width:220px;height:220px;border-radius:50%;background:${gradiente()};border:4px solid var(--border);"></div>
-          <div class="ruleta-pointer" style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:18px solid var(--rojo);"></div>
-        </div>
-      </div>
-      <div class="ruleta-opciones" id="${contenedorId}-opciones"></div>
-      <div style="display:flex;gap:8px;">
-        <button class="admin-btn" id="${contenedorId}-add">➕ Opción</button>
-        <button class="admin-btn admin-btn-save" id="${contenedorId}-girar">🎡 Girar</button>
-      </div>
-      <div class="ruleta-resultado" id="${contenedorId}-resultado"></div>
+  data.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'ln-row';
+    const avatar = d.avatar_url ? `background-image:url('${d.avatar_url}');background-position:${d.avatar_pos_x}% ${d.avatar_pos_y}%` : '';
+    row.innerHTML = `
+      <div class="ln-avatar" style="${avatar}"></div>
+      <div class="ln-info"><b>${escapeHtml(d.jugador)}</b><span>Los cromos van para ${escapeHtml(d.destinatario)}</span></div>
+      <div class="ln-deuda">-${d.cantidad}</div>
+      ${ADMIN_STATE.activo ? '<div class="ln-acciones"><button class="admin-btn ln-editar" title="Editar">✏️</button><button class="admin-btn ln-quitar" title="Sacar de la lista">🗑️</button></div>' : ''}
     `;
-
-    const opDiv = document.getElementById(`${contenedorId}-opciones`);
-    opciones.forEach((o, i) => {
-      const row = document.createElement('div');
-      row.className = 'ruleta-opcion-row';
-      row.innerHTML = `
-        <input type="text" value="${escapeHtml(o.nombre)}" data-idx="${i}" data-field="nombre">
-        <input type="number" min="1" value="${o.cantidad}" data-idx="${i}" data-field="cantidad">
-        <button data-idx="${i}">✕</button>
-      `;
-      opDiv.appendChild(row);
-    });
-
-    opDiv.querySelectorAll('input').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const idx = +inp.dataset.idx, field = inp.dataset.field;
-        opciones[idx][field] = field === 'cantidad' ? (Number(inp.value)||1) : inp.value;
-        const wheel = document.getElementById(`${contenedorId}-wheel`);
-        if(wheel) wheel.style.background = gradiente();
+    if(ADMIN_STATE.activo){
+      row.querySelector('.ln-editar').addEventListener('click', () => {
+        document.getElementById('deuda-jugador').value = d.jugador;
+        document.getElementById('deuda-cantidad').value = d.cantidad;
+        document.getElementById('deuda-destinatario').value = d.destinatario;
+        document.getElementById('form-deuda').style.display = 'block';
       });
-    });
-    opDiv.querySelectorAll('button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if(opciones.length <= 2){ alert('Necesitás al menos 2 opciones'); return; }
-        opciones.splice(+btn.dataset.idx, 1);
-        render();
+      row.querySelector('.ln-quitar').addEventListener('click', async () => {
+        if(!confirm(`¿Sacar a ${d.jugador} de la lista negra?`)) return;
+        const r = await fetch('/api/admin/lista_negra_borrar', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({password: ADMIN_STATE.password, jugador: d.jugador})
+        });
+        const j = await r.json();
+        if(j.ok) await cargarListaNegra(); else alert('Error: ' + (j.error || 'no se pudo sacar'));
       });
-    });
-    document.getElementById(`${contenedorId}-add`).addEventListener('click', () => {
-      opciones.push({ nombre: `Opción ${opciones.length+1}`, cantidad: 1 });
-      render();
-    });
-    document.getElementById(`${contenedorId}-girar`).addEventListener('click', girar);
-  }
-
-  function girar(){
-    if(girando) return;
-    const total = opciones.reduce((s,o)=>s+Number(o.cantidad||0),0);
-    if(total <= 0){ alert('Cargá alguna cantidad mayor a 0'); return; }
-    girando = true;
-
-    let r = Math.random()*total, acumulado = 0, elegido = opciones[0], start = 0, end = 0;
-    for(const o of opciones){
-      const desde = acumulado;
-      acumulado += Number(o.cantidad||0);
-      if(r <= acumulado){ elegido = o; start = (desde/total)*360; end = (acumulado/total)*360; break; }
     }
-    const mid = (start+end)/2;
-    const anguloFinal = 5*360 + (360 - mid);
-
-    const wheel = document.getElementById(`${contenedorId}-wheel`);
-    document.getElementById(`${contenedorId}-resultado`).textContent = '';
-    wheel.style.transform = `rotate(${anguloFinal}deg)`;
-
-    setTimeout(() => {
-      document.getElementById(`${contenedorId}-resultado`).textContent = `🎉 ${elegido.nombre}`;
-      girando = false;
-      wheel.style.transition = 'none';
-      wheel.style.transform = `rotate(${anguloFinal % 360}deg)`;
-      requestAnimationFrame(() => { wheel.style.transition = ''; });
-    }, 4200);
-  }
-
-  render();
+    cont.appendChild(row);
+  });
 }
-crearRuleta('ruleta-1');
-crearRuleta('ruleta-2');
+cargarListaNegra();
+
+document.getElementById('btn-nueva-deuda').addEventListener('click', () => {
+  ['deuda-jugador','deuda-cantidad','deuda-destinatario'].forEach(id => document.getElementById(id).value = '');
+  const f = document.getElementById('form-deuda');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('btn-cancelar-deuda').addEventListener('click', () => {
+  document.getElementById('form-deuda').style.display = 'none';
+});
+document.getElementById('btn-guardar-deuda').addEventListener('click', async () => {
+  const body = {
+    password: ADMIN_STATE.password,
+    jugador: document.getElementById('deuda-jugador').value.trim(),
+    cantidad: document.getElementById('deuda-cantidad').value,
+    destinatario: document.getElementById('deuda-destinatario').value.trim(),
+  };
+  const res = await fetch('/api/admin/lista_negra', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if(data.ok){
+    document.getElementById('form-deuda').style.display = 'none';
+    await cargarListaNegra();
+    await cargarJugadores();
+  } else {
+    alert('Error: ' + (data.error || 'no se pudo guardar'));
+  }
+});
 </script>
 
 </body>
