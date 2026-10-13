@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import os
@@ -68,11 +69,22 @@ def get_db():
         ("logros", "TEXT"),
         ("avatar_pos_x", "REAL NOT NULL DEFAULT 50"),
         ("avatar_pos_y", "REAL NOT NULL DEFAULT 50"),
+        ("cromos_manual", "INTEGER"),
+        ("cromos_infinito", "INTEGER NOT NULL DEFAULT 0"),
     ]:
         try:
             conn.execute(f"ALTER TABLE jugadores ADD COLUMN {columna} {tipo}")
         except sqlite3.OperationalError:
             pass
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS deudas (
+            jugador TEXT PRIMARY KEY,
+            cantidad INTEGER NOT NULL,
+            destinatario TEXT NOT NULL
+        )
+        """
+    )
     return conn
 
 
@@ -100,7 +112,7 @@ def upsert_jugador(nombre: str, avatar_url: str = None, avatar_pos_x: float = No
 def obtener_jugador(nombre: str):
     conn = get_db()
     row = conn.execute(
-        "SELECT nombre, avatar_url, banner_url, victorias, racha, logros, avatar_pos_x, avatar_pos_y FROM jugadores WHERE nombre = ?",
+        "SELECT nombre, avatar_url, banner_url, victorias, racha, logros, avatar_pos_x, avatar_pos_y, cromos_manual, cromos_infinito FROM jugadores WHERE nombre = ?",
         (nombre,),
     ).fetchone()
     conn.close()
@@ -109,7 +121,8 @@ def obtener_jugador(nombre: str):
 
 def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str = None,
                     banner_url: str = None, victorias: int = None, racha: int = None, logros: str = None,
-                    avatar_pos_x: float = None, avatar_pos_y: float = None):
+                    avatar_pos_x: float = None, avatar_pos_y: float = None,
+                    cromos_manual=None, cromos_infinito: int = None):
     conn = get_db()
     actual = conn.execute("SELECT * FROM jugadores WHERE nombre = ?", (nombre_actual,)).fetchone()
     if actual is None:
@@ -125,6 +138,8 @@ def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str
             return False
         conn.execute("UPDATE jugadores SET nombre = ? WHERE nombre = ?", (nombre_final, nombre_actual))
         conn.execute("UPDATE cromos SET owner_username = ? WHERE owner_username = ?", (nombre_final, nombre_actual))
+        conn.execute("UPDATE deudas SET jugador = ? WHERE jugador = ?", (nombre_final, nombre_actual))
+        conn.execute("UPDATE deudas SET destinatario = ? WHERE destinatario = ?", (nombre_final, nombre_actual))
 
     campos, valores = [], []
     if avatar_url is not None:
@@ -141,6 +156,17 @@ def editar_jugador(nombre_actual: str, nuevo_nombre: str = None, avatar_url: str
         campos.append("avatar_pos_x = ?"); valores.append(avatar_pos_x)
     if avatar_pos_y is not None:
         campos.append("avatar_pos_y = ?"); valores.append(avatar_pos_y)
+    if cromos_manual is not None:
+        # "" = borrar el valor manual (vuelve a contarse solo)
+        if str(cromos_manual).strip() == "":
+            campos.append("cromos_manual = NULL")
+        else:
+            try:
+                campos.append("cromos_manual = ?"); valores.append(int(cromos_manual))
+            except ValueError:
+                pass
+    if cromos_infinito is not None:
+        campos.append("cromos_infinito = ?"); valores.append(1 if cromos_infinito else 0)
 
     if campos:
         valores.append(nombre_final)
@@ -155,7 +181,8 @@ def listar_jugadores():
     conn = get_db()
     rows = conn.execute(
         """
-        SELECT j.nombre, j.avatar_url, j.avatar_pos_x, j.avatar_pos_y, COUNT(c.id) as cantidad
+        SELECT j.nombre, j.avatar_url, j.avatar_pos_x, j.avatar_pos_y, COUNT(c.id) as cantidad,
+               j.cromos_manual, j.cromos_infinito
         FROM jugadores j
         LEFT JOIN cromos c ON c.owner_username = j.nombre
         GROUP BY j.nombre
@@ -371,6 +398,153 @@ def importar_todo(datos: list) -> int:
     conn.commit()
     conn.close()
     return len(datos)
+
+
+# ---------- Lista negra (deudas de cromos) ----------
+def resolver_deuda(nombre: str):
+    """Si `nombre` tiene deuda, descuenta 1 y devuelve (destinatario, True, restante).
+    Si no tiene, devuelve (nombre, False, 0)."""
+    if not nombre:
+        return nombre, False, 0
+    conn = get_db()
+    row = conn.execute("SELECT cantidad, destinatario FROM deudas WHERE jugador = ?", (nombre,)).fetchone()
+    if row is None or row[0] <= 0:
+        conn.close()
+        return nombre, False, 0
+    cantidad, destinatario = row
+    restante = cantidad - 1
+    if restante <= 0:
+        conn.execute("DELETE FROM deudas WHERE jugador = ?", (nombre,))
+        restante = 0
+    else:
+        conn.execute("UPDATE deudas SET cantidad = ? WHERE jugador = ?", (restante, nombre))
+    conn.commit()
+    conn.close()
+    upsert_jugador(destinatario)
+    return destinatario, True, restante
+
+
+def listar_deudas():
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT d.jugador, d.cantidad, d.destinatario, j.avatar_url, j.avatar_pos_x, j.avatar_pos_y
+        FROM deudas d
+        LEFT JOIN jugadores j ON j.nombre = d.jugador
+        ORDER BY d.cantidad DESC, d.jugador ASC
+        """
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+def guardar_deuda(jugador: str, cantidad: int, destinatario: str):
+    conn = get_db()
+    if cantidad <= 0:
+        conn.execute("DELETE FROM deudas WHERE jugador = ?", (jugador,))
+    else:
+        conn.execute(
+            "INSERT INTO deudas (jugador, cantidad, destinatario) VALUES (?, ?, ?) "
+            "ON CONFLICT(jugador) DO UPDATE SET cantidad = excluded.cantidad, destinatario = excluded.destinatario",
+            (jugador, cantidad, destinatario),
+        )
+    conn.commit()
+    conn.close()
+
+
+def borrar_deuda(jugador: str) -> bool:
+    conn = get_db()
+    cur = conn.execute("DELETE FROM deudas WHERE jugador = ?", (jugador,))
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
+
+
+# ---------- Respaldo completo (cromos + perfiles + reglas/links + deudas + archivos subidos) ----------
+COLUMNAS_JUGADOR = [
+    "nombre", "avatar_url", "banner_url", "victorias", "racha", "logros",
+    "avatar_pos_x", "avatar_pos_y", "cromos_manual", "cromos_infinito",
+]
+
+
+def exportar_completo():
+    cromos = exportar_todo()
+    conn = get_db()
+    filas = conn.execute(f"SELECT {', '.join(COLUMNAS_JUGADOR)} FROM jugadores").fetchall()
+    jugadores = [dict(zip(COLUMNAS_JUGADOR, f)) for f in filas]
+    config = {k: v for k, v in conn.execute("SELECT clave, valor FROM config").fetchall()}
+    deudas = [
+        {"jugador": j, "cantidad": c, "destinatario": d}
+        for j, c, d in conn.execute("SELECT jugador, cantidad, destinatario FROM deudas").fetchall()
+    ]
+    conn.close()
+
+    urls = set()
+    for c in cromos:
+        for k in ("imagen_url", "imagen_nivel1", "imagen_nivel2", "imagen_nivel3"):
+            urls.add(c.get(k))
+    for j in jugadores:
+        urls.add(j.get("avatar_url"))
+        urls.add(j.get("banner_url"))
+
+    archivos = {}
+    for u in urls:
+        if u and u.startswith("/uploads/"):
+            nombre = os.path.basename(u)
+            ruta = os.path.join(UPLOADS_DIR, nombre)
+            if os.path.isfile(ruta):
+                with open(ruta, "rb") as f:
+                    archivos[nombre] = base64.b64encode(f.read()).decode("ascii")
+
+    return {
+        "version": 2, "cromos": cromos, "jugadores": jugadores,
+        "config": config, "deudas": deudas, "archivos": archivos,
+    }
+
+
+def importar_completo(datos):
+    """Acepta el respaldo nuevo (dict) o el viejo (lista de cromos). Devuelve un resumen."""
+    if isinstance(datos, list):
+        return {"cromos": importar_todo(datos), "jugadores": 0, "deudas": 0, "archivos": 0}
+
+    archivos_restaurados = 0
+    for nombre, contenido in (datos.get("archivos") or {}).items():
+        nombre_seguro = os.path.basename(nombre)
+        if not nombre_seguro or nombre_seguro != nombre or ".." in nombre:
+            continue
+        with open(os.path.join(UPLOADS_DIR, nombre_seguro), "wb") as f:
+            f.write(base64.b64decode(contenido))
+        archivos_restaurados += 1
+
+    cantidad_cromos = importar_todo(datos.get("cromos") or [])
+
+    conn = get_db()
+    for j in datos.get("jugadores") or []:
+        conn.execute(
+            f"INSERT OR REPLACE INTO jugadores ({', '.join(COLUMNAS_JUGADOR)}) "
+            f"VALUES ({', '.join('?' for _ in COLUMNAS_JUGADOR)})",
+            tuple(j.get(col) for col in COLUMNAS_JUGADOR),
+        )
+    for clave, valor in (datos.get("config") or {}).items():
+        conn.execute("INSERT OR REPLACE INTO config (clave, valor) VALUES (?, ?)", (clave, valor))
+    for d in datos.get("deudas") or []:
+        conn.execute(
+            "INSERT OR REPLACE INTO deudas (jugador, cantidad, destinatario) VALUES (?, ?, ?)",
+            (d["jugador"], d["cantidad"], d["destinatario"]),
+        )
+    conn.execute(
+        "INSERT OR IGNORE INTO jugadores (nombre) "
+        "SELECT DISTINCT owner_username FROM cromos WHERE owner_username IS NOT NULL AND owner_username != ''"
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "cromos": cantidad_cromos,
+        "jugadores": len(datos.get("jugadores") or []),
+        "deudas": len(datos.get("deudas") or []),
+        "archivos": archivos_restaurados,
+    }
 
 
 # ---------- Bot de Discord ----------
@@ -723,20 +897,29 @@ def api_cromos():
 @web_app.route("/api/ranking")
 def api_ranking():
     conn = get_db()
+    # todo dueño que aparezca en un cromo tiene que existir como jugador
+    conn.execute(
+        "INSERT OR IGNORE INTO jugadores (nombre) "
+        "SELECT DISTINCT owner_username FROM cromos WHERE owner_username IS NOT NULL AND owner_username != ''"
+    )
+    conn.commit()
     rows = conn.execute(
         """
-        SELECT owner_username, COUNT(*) as cantidad
-        FROM cromos
-        WHERE owner_username IS NOT NULL AND owner_username != ''
-        GROUP BY owner_username
-        ORDER BY cantidad DESC
+        SELECT j.nombre, j.cromos_manual, j.cromos_infinito, COUNT(c.id)
+        FROM jugadores j
+        LEFT JOIN cromos c ON c.owner_username = j.nombre
+        GROUP BY j.nombre
         """
     ).fetchall()
     conn.close()
-    return jsonify(
-        [{"owner_username": r[0], "cantidad": r[1]} for r in rows]
-    )
 
+    resultado = []
+    for nombre, manual, infinito, real in rows:
+        cantidad = manual if manual is not None else real
+        if infinito or cantidad > 0:
+            resultado.append({"owner_username": nombre, "cantidad": cantidad, "infinito": bool(infinito)})
+    resultado.sort(key=lambda r: (not r["infinito"], -r["cantidad"], r["owner_username"].lower()))
+    return jsonify(resultado)
 
 
 REGLAS_DEFAULT = """
@@ -868,8 +1051,11 @@ def api_admin_subir_nivel():
 def api_jugadores():
     filas = listar_jugadores()
     return jsonify([
-        {"nombre": n, "avatar_url": a, "avatar_pos_x": px, "avatar_pos_y": py, "cantidad": c}
-        for n, a, px, py, c in filas
+        {
+            "nombre": n, "avatar_url": a, "avatar_pos_x": px, "avatar_pos_y": py,
+            "cantidad": manual if manual is not None else c, "infinito": bool(inf),
+        }
+        for n, a, px, py, c, manual, inf in filas
     ])
 
 
@@ -896,11 +1082,12 @@ def api_jugador_perfil(nombre):
     row = obtener_jugador(nombre)
     if row is None:
         return jsonify({"ok": False, "error": "No existe"}), 404
-    n, avatar, banner, victorias, racha, logros, pos_x, pos_y = row
+    n, avatar, banner, victorias, racha, logros, pos_x, pos_y, manual, infinito = row
     return jsonify({
         "nombre": n, "avatar_url": avatar, "banner_url": banner,
         "victorias": victorias, "racha": racha, "logros": logros or "",
         "avatar_pos_x": pos_x, "avatar_pos_y": pos_y,
+        "cromos_manual": manual, "cromos_infinito": bool(infinito),
     })
 
 
@@ -958,9 +1145,13 @@ def api_admin_editar_jugador():
     pos_x = request.form.get("avatar_pos_x", type=float)
     pos_y = request.form.get("avatar_pos_y", type=float)
 
+    cromos_manual = request.form.get("cromos_manual")      # None = no tocar, "" = borrar, "7" = fijar
+    cromos_infinito = request.form.get("cromos_infinito", type=int)
+
     ok = editar_jugador(
         nombre_actual, nuevo_nombre=nuevo_nombre, avatar_url=avatar_url, banner_url=banner_url,
         victorias=victorias, racha=racha, logros=logros, avatar_pos_x=pos_x, avatar_pos_y=pos_y,
+        cromos_manual=cromos_manual, cromos_infinito=cromos_infinito,
     )
     if not ok:
         return jsonify({"ok": False, "error": "No se pudo editar (¿nombre repetido?)"}), 400
@@ -984,8 +1175,12 @@ def api_admin_crear_cromo():
     archivo.save(os.path.join(UPLOADS_DIR, nombre_archivo))
     url_publica = f"/uploads/{nombre_archivo}"
 
-    cromo_id = crear_cromo(nombre, url_publica, 0, None, dueno or None)
-    return jsonify({"ok": True, "cromo_id": cromo_id})
+    destino, redirigido, restante = resolver_deuda(dueno) if dueno else (None, False, 0)
+    cromo_id = crear_cromo(nombre, url_publica, 0, None, destino or None)
+    return jsonify({
+        "ok": True, "cromo_id": cromo_id,
+        "redirigido_a": destino if redirigido else None, "deuda_restante": restante,
+    })
 
 
 @web_app.route("/api/admin/cambiar_dueno", methods=["POST"])
@@ -1000,14 +1195,90 @@ def api_admin_cambiar_dueno():
         return jsonify({"ok": False, "error": "Falta el cromo"}), 400
 
     conn = get_db()
+    fila = conn.execute("SELECT owner_username FROM cromos WHERE id = ?", (cromo_id,)).fetchone()
+    conn.close()
+    if fila is None:
+        return jsonify({"ok": False, "error": "No existe ese cromo"}), 404
+    dueno_actual = fila[0] or ""
+
+    # si el dueño no cambia, no se toca la lista negra
+    destino, redirigido, restante = nuevo_dueno, False, 0
+    if nuevo_dueno and nuevo_dueno != dueno_actual:
+        destino, redirigido, restante = resolver_deuda(nuevo_dueno)
+
+    conn = get_db()
     conn.execute(
         "UPDATE cromos SET owner_id = NULL, owner_username = ? WHERE id = ?",
-        (nuevo_dueno or None, cromo_id),
+        (destino or None, cromo_id),
     )
     conn.commit()
     conn.close()
-    if nuevo_dueno:
-        upsert_jugador(nuevo_dueno)
+    if destino:
+        upsert_jugador(destino)
+    return jsonify({
+        "ok": True, "dueno_final": destino,
+        "redirigido_a": destino if redirigido else None, "deuda_restante": restante,
+    })
+
+
+@web_app.route("/api/admin/borrar_cromo", methods=["POST"])
+def api_admin_borrar_cromo():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    cromo_id = data.get("cromo_id")
+    if not cromo_id:
+        return jsonify({"ok": False, "error": "Falta el cromo"}), 400
+    if not borrar_cromo(cromo_id):
+        return jsonify({"ok": False, "error": "No existe ese cromo"}), 404
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/lista_negra")
+def api_lista_negra():
+    return jsonify([
+        {
+            "jugador": j, "cantidad": c, "destinatario": d,
+            "avatar_url": a, "avatar_pos_x": px, "avatar_pos_y": py,
+        }
+        for j, c, d, a, px, py in listar_deudas()
+    ])
+
+
+@web_app.route("/api/admin/lista_negra", methods=["POST"])
+def api_admin_lista_negra():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+
+    jugador = (data.get("jugador") or "").strip()
+    destinatario = (data.get("destinatario") or "").strip()
+    try:
+        cantidad = int(data.get("cantidad"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "La cantidad tiene que ser un número"}), 400
+
+    if not jugador:
+        return jsonify({"ok": False, "error": "Falta el jugador"}), 400
+    if cantidad > 0:
+        if not destinatario:
+            return jsonify({"ok": False, "error": "Elegí quién recibe los cromos"}), 400
+        if destinatario == jugador:
+            return jsonify({"ok": False, "error": "El que debe no puede ser el que recibe"}), 400
+        upsert_jugador(destinatario)
+    upsert_jugador(jugador)
+    guardar_deuda(jugador, cantidad, destinatario)
+    return jsonify({"ok": True})
+
+
+@web_app.route("/api/admin/lista_negra_borrar", methods=["POST"])
+def api_admin_lista_negra_borrar():
+    data = request.get_json(force=True, silent=True) or {}
+    if not _password_valida(data.get("password", "")):
+        return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
+    if not borrar_deuda((data.get("jugador") or "").strip()):
+        return jsonify({"ok": False, "error": "No estaba en la lista"}), 404
     return jsonify({"ok": True})
 
 
@@ -1017,8 +1288,8 @@ def api_admin_exportar():
     if not _password_valida(password):
         return jsonify({"ok": False, "error": "Contraseña incorrecta"}), 403
 
-    datos = exportar_todo()
-    contenido = json.dumps(datos, ensure_ascii=False, indent=2)
+    datos = exportar_completo()
+    contenido = json.dumps(datos, ensure_ascii=False)
     return Response(
         contenido,
         mimetype="application/json",
@@ -1041,8 +1312,11 @@ def api_admin_importar():
     except Exception:
         return jsonify({"ok": False, "error": "El archivo no es un respaldo válido"}), 400
 
-    cantidad = importar_todo(datos)
-    return jsonify({"ok": True, "cantidad": cantidad})
+    try:
+        resumen = importar_completo(datos)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"No se pudo restaurar: {e}"}), 400
+    return jsonify({"ok": True, **resumen})
 
 
 def run_web_server():
