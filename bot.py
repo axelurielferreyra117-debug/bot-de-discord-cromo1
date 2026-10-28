@@ -10,8 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 
 # ---------- Configuración desde variables de entorno ----------
-DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-MOD_ROLE_ID = int(os.environ["MOD_ROLE_ID"])
+DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")          # opcional: sin token corre solo la web
+MOD_ROLE_ID = int(os.environ.get("MOD_ROLE_ID") or 0)  # solo lo usan los comandos de Discord
 PORT = int(os.environ.get("PORT", 10000))
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "Muchachada574!")
 
@@ -1324,5 +1324,9 @@ def run_web_server():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=run_web_server, daemon=True).start()
-    bot.run(DISCORD_TOKEN)
+    if DISCORD_TOKEN:
+        threading.Thread(target=run_web_server, daemon=True).start()
+        bot.run(DISCORD_TOKEN)
+    else:
+        print("Sin DISCORD_TOKEN: corre solo la página web.")
+        run_web_server()
